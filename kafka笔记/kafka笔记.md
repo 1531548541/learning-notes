@@ -98,7 +98,7 @@
 
 ### **高效读写数据**
 
-**1****）****Kafka** **本身是分布式集群，可以采用分区技术，并行度高**
+**1****）**Kafka** **本身是分布式集群，可以采用分区技术，并行度高**
 
 **2****）读数据采用稀疏索引，可以快速定位要消费的数据**
 
@@ -205,7 +205,88 @@ Kafka 的 producer 生产数据，要写入到 log 文件中，写的过程是�
 
 ![image-20220615144712847](images\image-20220615144712847.png)
 
-## 常用命令
+# 分区优化
+
+## 优先副本的选举
+
+在创建主题的时候，该主题的分区及副本会**尽可能均匀地**分布到 Kafka 集群的各个 broker节点上，对 leader 本的分配也比较均匀。 比如我们使用 kafka-topics sh 建一个分区数为 3、副本因子为3 的主题 topi partitions 创建之后的分布信息如下：
+
+~~~sh
+[root@nodel kafka 2 . 11 - 2 . 0 . 0 ]# bin/kafka- topics. sh --zookeeper localhost : 2181/ 
+kafka --describe --topic topic - partitions 
+
+Topic :topic-partitions 
+PartitionCount : 3 ReplicationFactor : 3 Configs : 
+Topic: topic-partitions Partition: 0 Leader: 1 Replicas: 1 , 2 , 0 Isr: 1 , 2 , 0 
+Topic: topic-partitions Partition: 1 Leader: 2 Replicas: 2 , 0 , 1 Isr: 2 , 0 , 1 
+Topic: topic-partitions Partition: 2 Leader: 0 Replicas: 0 , 1 , 2 Isr: 0 , 1,  2 
+~~~
+
+如果brokerId =2的节点重启，那么主题 topic-partitions 分布信息如下：
+
+~~~sh
+[root@nodel kafka 2 . 11 - 2 . 0 . 0 ]# bin/kafka- topics. sh --zookeeper localhost : 2181/ 
+kafka --describe --topic topic - partitions 
+
+Topic :topic-partitions 
+PartitionCount : 3 ReplicationFactor : 3 Configs : 
+Topic: topic-partitions Partition: 0 Leader: 1 Replicas: 1 , 2 , 0 Isr: 1 , 0 , 2 
+Topic: topic-partitions Partition: 1 Leader: 0 Replicas: 2 , 0 , 1 Isr: 0 , 1 , 2 
+Topic: topic-partitions Partition: 2 Leader: 0 Replicas: 0 , 1 , 2 Isr: 0 , 1,  2 
+~~~
+
+可以看到，现在的分区已经不平衡了！
+
+为了能够有效治理负载失衡，Kafka 引入了**优先副本**（ preferred replica )的概念。优先副本是指在 AR 集合列表中的第一个副本，如上面主题 topic-partitions 分区AR 集合表（ Replicas ）为[1,2,0]，那么分区0的优先副本即为1。理想情况下，优先本就是该分区的 leader 副本，所 以也可以称之为 preferred leader。kafka 要确保所有主题的优先本在 Kafka 集群中均匀分布，这样就保证了所有分区 leader 均衡分布， 如果 leader分布过于集中，就会造成集群负载不均衡。
+
+> 此外，auto.leader.rebalance.enable=true，可以实现自平衡，但在线上环境中**不建议使用**！
+
+kafka-perferred-replica-election.sh 脚本提供了对分区 leader 副本（全部分区）进行重新平衡的功能。优先副本的选举过程是一个安全的过程， Kafka 客户端可以自动感知分区 leader 副本的变更。下面的示例演示了脚本的具体用法：
+
+![image-20220808202659721](images/image-20220808202659721.png)
+
+![image-20220808200959609](images/image-20220808200959609.png)
+
+## 分区重分配
+
+> 新增broker节点时，旧的分区、副本无法知晓新的broker，这时需要将其重分配到新broker。
+
+**kafka-reassign-partitions.sh** 脚本的使用分为3个步骤：
+
+1. 首先创建需要 1个包含主题清单的JSON 文件
+
+   ~~~json
+   {
+   	"topics":[
+   			{
+   					"topic":"topic-reassign"
+   			}
+   		],
+   		"version":1
+   }
+   ~~~
+
+   
+
+2. 其次根据主题清单和 broker节点清单生成一份重分配方案
+
+   ![image-20220808204325363](images/image-20220808204325363.png)
+
+   上面示例中打印出了两个 JSON 格式的内容。第1个“ Current partition replica assignment" 所对应的 JSON 内容为当前的分区副本分配情况，在执行分区重分配的时候最好将这个内容保存起来，以备后续的回滚操作。第2个“Proposed partition reassignment configuration ，，所对应的JSON 容为重分配的候选方案，注意这里只是生成一份可行性的方案，并没有真正执行重分配的动作 。生成的可行性方案的具体算法和创建主题时的 样，这里也包含了机架信息。
+
+3. 最后根据这份方案执行具体的重分配动作。
+
+   ![image-20220808204512709](images/image-20220808204512709.png)
+
+   对于分区重分配而言，这里还有可选的第四步操作，即验证查看分区分配的进度，只需将上面的 execute 替换为 verify 即可， 具体示例如下：
+
+   ![image-20220808204733500](images/image-20220808204733500.png)
+
+## 复制限流
+
+> 
+
+# 常用命令
 
 ~~~shell
 #创建分区、副本
