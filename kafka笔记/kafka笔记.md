@@ -1,22 +1,362 @@
-# 安装
+# 安装（集群）
 
-1. **检查是否安装jdk**，解压kafka包
+**环境介绍**
 
-2. 修改解压文件中的 service.properties(broker、主机、log目录)
+| 名称      | 版本       |
+| --------- | ---------- |
+| linux     | centos7    |
+| kafka     | 2.12-3.0.0 |
+| jdk       | 8          |
+| zookeeper | 3.8        |
+| rsync     | 3.1.2      |
 
-   ````shell
-   broker.id=0
-   
-   log.dirs=/opt/module/kafka/datas
-   
-   zookeeper.connect=kafka01:2181,kafka02:2181,kafka03:2181/kafka
-   ````
+**0.环境准备(可选)**
 
-3. 配置环境变量
+~~~sh
+#查看网卡信息
+$ ip addr
 
-   
+#enp0s3 可见是 dhcp 动态分配的，也就是上面的网卡 1
+#enp0s8 也就是网卡 2，没有分配 ip ，我们需要给网卡 2 设置静态 ip，通过他来内网通信
 
-4. 启动
+#配置网卡
+$ vim /etc/netplan/00-installer-config.yaml
+network:
+  ethernets:
+    enp0s3:
+      dhcp4: yes
+    enp0s8:
+      dhcp4: no
+      addresses: [192.168.128.128/24]
+      nameservers:
+        addresses: [8.8.8.8]
+  version: 2
+  
+#应用网卡配置
+$ netplan apply
+
+
+#配置主机名
+$ vim /etc/hosts
+
+192.168.200.128 node01
+192.168.200.129 node02
+192.168.200S.130 node03
+
+$ vim /etc/hostname
+node01
+
+
+#配置 ssh
+$ vim /etc/ssh/sshd_config
+
+# 允许登录 root 用户
+PermitRootLogin yes
+# 允许密码登录
+PasswordAuthentication yes
+
+
+#重启 ssh 服务
+$ service ssh restart
+
+~~~
+
+~~~sh
+#安装rsync(依赖gcc，make需要下perl，若没有则需要安装)
+cd rsync-2.6.9
+./configure --prefix=/usr/local/rsync
+make && make install 
+~~~
+
+
+
+- 克隆虚拟机（移除网络适配器重新添加，避免mac冲突）
+
+![img](images\4f341589e47f4c83870f47bd4f1cb2c2.png)
+
+- 免密登录(所有机子间都必须配置免密登录)
+
+生成公私钥
+
+```shell
+# 默认位置在 ~/.ssh
+$ ssh-keygen
+
+#id_rsa 是私钥，id_rsa.pub 是公钥
+#把生成的公钥复制给要登录的机子上 ~/.ssh/authorized_keys
+#配置多个只要另起一行就行
+
+#！！！！！！！！！！！一定要通过这种方式添加公钥到authorized_keys！！！！！！！！！！！！！！！！！
+$ ssh-copy-id -i /root/.ssh/id_rsa.pub root@IP
+```
+
+- 分发脚本
+
+~~~sh
+#分发脚本
+$ vim /bin/xsync
+
+#!/bin/bash
+#1 获取输入参数个数，如果没有参数，直接退出
+pcount=$#
+if((pcount==0)); then
+echo no args;
+exit;
+fi
+
+#2 获取文件名称
+p1=$1
+fname=`basename $p1`
+echo fname=$fname
+
+#3 获取上级目录到绝对路径
+pdir=`cd -P $(dirname $p1); pwd`
+echo pdir=$pdir
+
+#4 获取当前用户名称
+user=`whoami`
+
+#5 循环，分发到 node01 ~ node03
+for((i=1; i<=3; i++)); do
+echo ------------------- node0$i --------------
+        rsync -rvl $pdir/$fname $user@node0$i:$pdir
+done
+~~~
+
+~~~sh
+$ chmod 777 /bin/xsync
+~~~
+
+将分发脚本分发下去
+
+~~~sh
+$ xsync /bin/xsync
+~~~
+
+
+
+**1.安装jdk**
+
+~~~sh
+$ vim /etc/profile
+# 拷贝以下内容
+export JAVA_HOME=/opt/jdk1.8.0_202
+export JRE_HOME=$JAVA_HOME/jre
+export PATH=$PATH:$JAVA_HOME/bin
+export CLASSPATH=.:$JAVA_HOME/lib/dt.jar:$JAVA_HOME/lib/tools.jar
+
+# 刷新配置
+$ source /etc/profile
+
+$ java -version # 出现以下结果，表示配置成功
+java version "1.8.0_202"
+Java(TM) SE Runtime Environment (build 1.8.0_202-b08)
+Java HotSpot(TM) 64-Bit Server VM (build 25.202-b08, mixed mode)
+
+# 配置成功后分发（为了同步其他node）
+$ xsync /opt/jdk1.8.0_202
+$ xsync /etc/profile
+~~~
+
+**2.安装zookeeper集群**
+
+~~~sh
+$ vim /etc/profile
+# 拷贝以下内容
+export ZK_HOME=/opt/zookeeper-3.8.0
+export PATH=$PATH:$JAVA_HOME/bin:$ZK_HOME/bin
+
+$ xsync /opt/zookeeper-3.8.0
+$ xsync /etc/profile
+~~~
+
+修改 zoo.cfg
+
+~~~sh
+$ cd /opt/zookeeper-3.8.0
+$ mkdir zkData
+$ cd conf
+$ mv zoo_sample.cfg zoo.cfg
+$ vim zoo.cfg
+
+dataDir=/opt/zookeeper-3.8.0/zkData
+server.1=node01:2888:3888
+server.2=node02:2888:3888
+server.3=node03:2888:3888
+
+$ xsync /opt/zookeeper-3.8.0/conf/zoo.cfg
+~~~
+
+配置 myid：填写上面 `server.x` 中对应的数字 `x`，如：1、2、3。每个机子都不一样
+
+~~~sh
+$ vim /opt/zookeeper-3.8.0/zkData/myid
+~~~
+
+**3.安装kafka集群**
+
+~~~sh
+$ vim /etc/profile
+# 尾部添加以下内容
+export KAFKA_HOME=/opt/kafka-3.2.0
+export PATH=$PATH:$KAFKA_HOME/bin
+
+$ xsync $KAFKA_HOME
+$ xsync /etc/profile
+~~~
+
+修改解压文件中的 service.properties(broker、主机、log目录)
+
+````shell
+$ vim $KAFKA_HOME/config/server.properties
+
+# broker 全局唯一编号，每个node不能重复
+broker.id=0
+
+log.dirs=/opt/module/kafka/datas
+
+zookeeper.connect=kafka01:2181,kafka02:2181,kafka03:2181/kafka
+````
+
+**4.启动**
+
+~~~sh
+#集群启动脚本
+$ vim /bin/xcall
+
+
+#!/bin/bash
+pcount=$#
+if((pcount==0));
+then
+        echo "command can not be null !"
+        exit
+fi
+
+user=`whoami`
+
+for ((i = 1; i <= 3; i++))
+do
+        echo ---------------- node0$i ----------------
+        ssh $user@node0$i 'source /etc/profile;'$@
+done
+
+echo --------------- complete ---------------
+~~~
+
+~~~sh
+$ chmod 777 /bin/xcall
+$ xsync /bin/xcall
+~~~
+
+
+
+- ZK 集群启动
+
+~~~sh
+$ xcall zkServer.sh start
+
+
+$ xcall zkServer.sh status
+---------------- node01 ----------------
+ZooKeeper JMX enabled by default
+Using config: /opt/module/zookeeper-3.8.0/bin/../conf/zoo.cfg
+Client port found: 2181. Client address: localhost. Client SSL: false.
+Mode: follower
+---------------- node02 ----------------
+ZooKeeper JMX enabled by default
+Using config: /opt/module/zookeeper-3.8.0/bin/../conf/zoo.cfg
+Client port found: 2181. Client address: localhost. Client SSL: false.
+Mode: leader
+---------------- node03 ----------------
+ZooKeeper JMX enabled by default
+Using config: /opt/module/zookeeper-3.8.0/bin/../conf/zoo.cfg
+Client port found: 2181. Client address: localhost. Client SSL: false.
+Mode: follower
+--------------- complete ---------------
+~~~
+
+- kafka集群启动
+
+~~~sh
+# 启动
+$ xcall kafka-server-start.sh -daemon $KAFKA_HOME/config/server.properties
+# 关闭
+$ xcall kafka-server-stop.sh
+
+
+#或者写个脚本
+$ vi /bin/kafka
+
+#!/bin/bash
+case $1 in
+"start"){
+	for i in node01 node02 node03
+	do 
+		echo "------启动 $i kafka-----"
+		ssh $i "source /etc/profile;$KAFKA_HOME/bin/kafka-server-start.sh -daemon $KAFKA_HOME/config/server.properties"
+	done
+}
+;;
+"stop"){
+	for i in node01 node02 node03
+	do 
+		echo "------停止 $i kafka-----"
+		ssh $i "$KAFKA_HOME/bin/kafka-server-stop.sh"
+	done
+}
+;;
+esac
+~~~
+
+**注意：停止 Kafka 集群时，一定要等 Kafka 所有节点进程全部停止后再停止 Zookeeper 集群。因为 Zookeeper 集群当中记录着 Kafka 集群相关信息，Zookeeper 集群一旦先停止，Kafka 集群就没有办法再获取停止进程的信息，只能手动杀死 Kafka 进程了。**
+
+
+
+检验是否ok
+
+~~~sh
+# 创建 topic
+$ kafka-topics.sh --bootstrap-server node01:9092,node02:9092,node03:9092 --create --partitions 3 --replication-factor 3 --topic hello
+# 创建生产者
+$ kafka-console-producer.sh --bootstrap-server node01:9092,node02:9092,node03:9092 --topic hello
+# 创建消费者
+$ kafka-console-consumer.sh --bootstrap-server node01:9092,node02:9092,node03:9092 --topic hello
+~~~
+
+可能出现的问题
+
+- 内网环境，缺各种tar包，如gcc、perl等
+
+- 配置完静态ip，ifconfig看不到ip，重启网络失败:Job for network.service failed
+
+~~~sh
+#解决：
+#关闭 NetworkManger
+service NetworkManager stop
+#并且禁止开机启动 
+chkconfig NetworkManager off
+#之后重启就好了
+~~~
+
+- 配置了ssh免密登录，但还要输入密码
+
+~~~sh
+文件权限、目录是否 ~/.ssh/authorized_keys 、是否是~/.ssh/id_rsa.pub中的公钥、删除known_hosts
+
+#踩大坑：
+如果还不行，删除.ssh文件，重新创建，并把权限设置700
+#一定要通过这种方式添加公钥到authorized_keys
+ssh-copy-id -i /root/.ssh/id_rsa.pub root@IP
+~~~
+
+- 启动zookeeper和kafka时，看日志。Connection refused
+
+~~~sh
+#防火墙关了，或者开启对应的端口
+~~~
+
+
 
 # 介绍
 
@@ -98,11 +438,11 @@
 
 ### **高效读写数据**
 
-**1****）**Kafka** **本身是分布式集群，可以采用分区技术，并行度高**
+**1**）**Kafka** **本身是分布式集群，可以采用分区技术，并行度高**
 
-**2****）读数据采用稀疏索引，可以快速定位要消费的数据**
+**2**）**读数据采用稀疏索引，可以快速定位要消费的数据**
 
-**3****）顺序写磁盘**
+**3**）**顺序写磁盘**
 
 Kafka 的 producer 生产数据，要写入到 log 文件中，写的过程是一直追加到文件末端，
 
@@ -112,7 +452,7 @@ Kafka 的 producer 生产数据，要写入到 log 文件中，写的过程是�
 
 ![image-20220615143644474](images\image-20220615143644474.png)
 
-**4****）页缓存** **+** **零拷贝技术**
+**4）页缓存** **+** **零拷贝技术**
 
 ![image-20220615143758698](images\image-20220615143758698.png)
 
@@ -296,3 +636,8 @@ bin/kafka-console-producer.sh --bootstrap-server node01:9092 --topic first
 bin/kafka-console-consumer.sh --bootstrap-server node01:9092 --topic first
 ~~~
 
+# 监控指标采集
+
+
+
+# api对于topic生命周期的管理
