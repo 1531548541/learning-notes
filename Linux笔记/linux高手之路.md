@@ -13,6 +13,34 @@ firewall-cmd --reload
 systemctl stop firewalld.service
 ~~~
 
+# rpm
+
+~~~sh
+#解压
+rpm -Uvh xx.rpm
+#查看某个rpm是否安装了
+rpm -qa|grep xx
+~~~
+
+# unzip
+
+~~~sh
+#把/home目录下面的data目录压缩为data.zip
+zip -r data.zip data #压缩data目录
+#把/home目录下面的data.zip解压到databak目录里面
+unzip data.zip -d databak
+#/home目录下面的a文件夹和3.txt压缩成为a123.zip
+zip -r a123.zip a 3.txt
+#/home目录下面的t.zip直接解压到/home目录里面
+unzip t.zip
+#/home目录下面的a1.zip、a2.zip、a3.zip同时解压到/home目录里面
+unzip a*.zip
+#/home目录下面w.zip里面的所有文件解压到第一级目录
+unzip -j wt.zip
+~~~
+
+
+
 # Kafka
 
 ~~~sh
