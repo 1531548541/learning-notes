@@ -2,13 +2,13 @@
 
 **环境介绍**
 
-| 名称      | 版本       |
-| --------- | ---------- |
-| linux     | centos7    |
-| kafka     | 2.12-3.0.0 |
-| jdk       | 8          |
-| zookeeper | 3.8        |
-| rsync     | 3.1.2      |
+| 名称                             | 版本       |
+| -------------------------------- | ---------- |
+| linux                            | centos7    |
+| kafka                            | 2.12-3.0.0 |
+| jdk                              | 8          |
+| zookeeper（新版kafka，可不装zk） | 3.8        |
+| rsync                            | 3.1.2      |
 
 **0.环境准备(可选)**
 
@@ -513,7 +513,13 @@ Kafka 的 producer 生产数据，要写入到 log 文件中，写的过程是�
 
 ![image-20220610142448052](images\image-20220610142448052.png)
 
+### 生产者分区策略
 
+kafka具体会按以下几种情况选择分区分配策略：
+
+1. 如果发送消息时指定分区，就按指定的分区投递消息
+2. 没有指定分区，但有key，则hash(key)%分区数
+3. 既没有指定分区，也没有key，采用轮询方式选择一个分区
 
 ### 数据重复
 
@@ -610,9 +616,9 @@ Kafka 的 producer 生产数据，要写入到 log 文件中，写的过程是�
 
 
 
-### 分区策略
+### 消费者分区策略
 
-- RangeAssignor 分配策略（**默认**）：提前分配好方案，尽可能均匀分配，不够分给前面的消费者多分一个**分区**。
+- RangeAssignor 分配策略（**默认**）：基于topic，提前分配好方案，尽可能均匀分配，不够分给前面的消费者多分一个**分区**。
 
   > 假设同一消费者组中2个消费者订阅2个主题，每个有3个分区。分配如下：
   >
@@ -657,12 +663,6 @@ Kafka 的 producer 生产数据，要写入到 log 文件中，写的过程是�
   >消费者1: t0p0、t1p1、t3p0、t2p0
   >
   >消费者3: t1p0、t2p1、t0p1、t3p1
-
-kafka具体会按以下几种情况选择分区分配策略：
-
-1. 指定分区
-2. key不为空：hash(key)%分区数
-3. 其他：粘性策略
 
 ### offset提交
 
@@ -777,8 +777,7 @@ while (true){
 在创建主题的时候，该主题的分区及副本会**尽可能均匀地**分布到 Kafka 集群的各个 broker节点上，对 leader 本的分配也比较均匀。 比如我们使用 kafka-topics.sh 建一个分区数为 3、副本因子为3 的主题 topic partitions 创建之后的分布信息如下：
 
 ~~~sh
-[root@nodel kafka 2 . 11 - 2 . 0 . 0 ]# bin/kafka- topics. sh --zookeeper localhost : 2181/ 
-kafka --describe --topic topic - partitions 
+[root@nodel kafka 2.11-2.0.0]# bin/kafka-topics.sh --zookeeper localhost:2181/kafka --describe --topic topic-partitions 
 
 Topic :topic-partitions 
 PartitionCount : 3 ReplicationFactor : 3 Configs : 
@@ -854,11 +853,23 @@ kafka-perferred-replica-election.sh 脚本提供了对分区 leader 副本（全
 # 常用命令
 
 ~~~shell
-#创建分区、副本
+#创建主题、分区、副本
+kafka-topics.sh --create --bootstrap-server node01:9092 --topic zfc --partitions 3 --replication-factor 2
 #创建生产者
-bin/kafka-console-producer.sh --bootstrap-server node01:9092 --topic first
+kafka-console-producer.sh --bootstrap-server node01:9092 --topic first
 #创建消费者
-bin/kafka-console-consumer.sh --bootstrap-server node01:9092 --topic first
+kafka-console-consumer.sh --bootstrap-server node01:9092 --topic first
+#查看分区、副本、isr信息
+kafka-topics.sh --bootstrap-server node01:9092 --describe --topic wujie
+#查看某个消费者组的消费情况
+kafka-consumer-groups.sh --bootstrap-server node01:9092 --describe --group wujiea
+#修改offset
+#移动偏移至最新
+kafka-consumer-groups.sh --bootstrap-server node01:9092 --group wujiea --reset-offsets --topic wujie -to-latest --execute
+#移动偏移至最早
+kafka-consumer-groups.sh --bootstrap-server node01:9092 --group wujiea --reset-offsets --topic wujie -to-earliest --execute
+#移动到指定时间偏移
+kafka-consumer-groups.sh --bootstrap-server node01:9092 --group wujiea --reset-offsets --topic wujie --to-datetime 2020-11-07T00:00:00.000 --execute
 ~~~
 
 # 日志存储（TODO）
