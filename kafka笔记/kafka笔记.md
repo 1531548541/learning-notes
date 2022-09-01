@@ -1553,3 +1553,258 @@ Topic、Consumer Group 列表；
 
 
 
+# 几个问题
+
+## ![image-20220901163855284](images/image-20220901163855284.png)
+
+## 为什么partition2数据分的多？
+
+- 主要原因是生产消息时，该分区消息就比其他的多（看log-end-offset）。
+
+>1.  是否存在代码层面的自定义分区？（看代码）
+>2. 生产者分区策略（指定分区？分区按hash(key)%n进行，看key指定的是否均匀？）
+>3. 此外，Kafka规定，当key为null时，默认只会分配到可用分区中，其他分区是不是都已不可用了？
+
+- 发现LAG过高，大量消息积压。
+
+> 消费者应付不过来，对比其他的分区就可看出
+
+## 如何确定partition2在那个服务器上？
+
+~~~sh
+kafka-topics.sh --bootstrap-server 192.168.200.130:9092 --describe --topic enis-file
+~~~
+
+![img](images/wps4.jpg)
+
+自己画的图，箭头是leader指向follower
+
+![img](images/wps5.png)
+
+## 如何提高kafka读写效率？
+
+1. producer
+
+   - 设置acks=1，表示leader写入即认为写入成功，但如果要保证消息写入可靠性的话，这个配置要慎重
+
+   - compression.type=lz4，设置消息压缩格式，降低网络传输
+
+   - buffer.memory:33554432 (32m)，在Producer端用来存放尚未发送出去的Message的缓冲区大小。缓冲区满了之后可以选择阻塞发送或抛出异常，由block.on.buffer.full的配置来决定。
+
+   - linger.ms:0，Producer默认会把两次发送时间间隔内收集到的所有Requests进行一次聚合然后再发送，以此提高吞吐量，而linger.ms则更进一步，这个参数为每次发送增加一些delay，以此来聚合更多的Message。
+
+   - batch.size:16384，Producer会尝试去把发往同一个Topic、Partition的多个Requests进行合并，batch.size指明了一次Batch合并后Requests总大小的上限。如果这个值设置的太小，可能会导致所有的Request都不进行Batch
+
+2. broker
+
+   - log.dirs配置多个磁盘存储不同分区，不要把配置一个磁盘多个目录作为多个分区的存储路径
+
+   - num.network.threads=3 ， broker处理消息的最大线程数 ，一般不改num.io.threads=3, broker处理磁盘IO的线程数 ，建议配置线程数量为cpu核数2倍，最大不超过3倍
+
+   - log.retention.hours=72 ，设置消息保留时间，如保留三天，也可以更短
+
+   - log.segment.bytes=1073741824 ，段文件配置1GB，有利于快速回收磁盘空间，重启kafka加载也会加快(如果文件过小，则文件数量比较多，kafka启动时是单线程扫描目录(log.dir)下所有数据文件
+
+   - replica.lag.time.max.ms:10000，replica.lag.max.messages:4000，用来控制副本在什么条件下从ISR队列移除
+
+   - num.replica.fetchers:1，在Replica上会启动若干Fetch线程把对应的数据同步到本地，而num.replica.fetchers这个参数是用来控制Fetch线程的数量。每个Partition启动的多个Fetcher，通过共享offset既保证了同一时间内Consumer和Partition之间的一对一关系，又允许我们通过增多Fetch线程来提高效率。
+
+   - default.replication.factor:1，这个参数指新创建一个topic时，默认的Replica数量，Replica过少会影响数据的可用性，太多则会白白浪费存储资源，一般建议在3为宜
+
+3. consumer
+
+   - num.consumer.fetchers:1，启动Consumer拉取数据的线程个数，适当增加可以提高并发度，新版规定只能是1，即单线程。
+
+   - fetch.min.bytes:1，每次Fetch Request至少要拿到多少字节的数据才可以返回， 在Fetch Request获取的数据至少达到fetch.min.bytes之前，允许等待的最大时长。对应上面说到的Purgatory中请求的超时时间： fetch.wait.max.ms:100
+
+## kafka数据丢了怎么办，可以恢复吗？
+
+![img](images/wps3.jpg)
+
+**1.生产端数据丢失**
+
+1）如果是同步模式
+
+ack机制能够保证数据的不丢失，如果ack设置为0，风险很大，一般不建议设置为0
+
+producer.type=sync 
+
+request.required.acks=1
+
+2）如果是异步模式
+
+通过buffer来进行控制数据的发送，有两个值来进行控制，时间阈值与消息的数量阈值，如果buffer满了数据还没有发送出去，如果设置的是立即清理模式，风险很大，一定要设置为阻塞模式
+
+producer.type=async 
+
+request.required.acks=1 
+
+queue.buffering.max.ms=5000 
+
+queue.buffering.max.messages=10000 
+
+queue.enqueue.timeout.ms = -1 
+
+batch.num.messages=200
+
+3)重试
+
+retries:MAX_VALUE
+
+reconnect.backoff.ms:20000
+
+retry.backoff.ms:20000
+
+**2.存储端消息丢失**
+
+多副本机制
+
+设置 min.insync.replicas > 1。这控制的是消息至少要被写入到多少个副本才算是“已提交”。设置成大于 1 可以提升消息持久性。在实际环境中千万不要使用默认值 1。
+
+确保 replication.factor > min.insync.replicas。如果两者相等，那么只要有一个副本挂机，整个分区就无法正常工作了。推荐设置成 replication.factor = min.insync.replicas + 1。
+
+**3.消费端数据丢失**
+
+设置auto.commit.enable=false,消费端手动提交，确保消息真的被消费并处理完成。
+
+**如何恢复?**：kafka依赖zk，在zk中配置文件的dataDir参数路径下记录着kafka的数据。**没落盘的就没了。**
+
+
+
+## 如何重跑kafka数据？
+
+1. 指定新的group(会重跑all data)
+
+   ~~~sh
+   bin/kafka-console-consumer.sh --bootstrap-server node01:9092 --topic wujie --group zfcdb --from-beginning
+   ~~~
+
+2. 修改offset（灵活）
+
+- Api层面就用seek()
+
+- 命令层面
+
+  ~~~sh
+  #修改offset
+  #移动偏移至最新
+  kafka-consumer-groups.sh --bootstrap-server node01:9092 --group wujiea --reset-offsets --topic wujie -to-latest --execute
+  #移动偏移至最早
+  kafka-consumer-groups.sh --bootstrap-server node01:9092 --group wujiea --reset-offsets --topic wujie -to-earliest --execute
+  #移动到指定时间偏移
+  kafka-consumer-groups.sh --bootstrap-server node01:9092 --group wujiea --reset-offsets --topic wujie --to-datetime 2020-11-07T00:00:00.000 --execute
+  ~~~
+
+
+
+## 为什么kafka吞吐那么高？（慢慢啃，慢慢研究）
+
+主要依赖于以下5点:
+
+1. **Zero Copy(零拷贝)技术**
+
+   - 传统I/O
+
+     > 在Linux系统中，传统I/O主要是通过read()和write()两个系统调用来实现的，通过read()函数读取文件到缓存区中，然后通过write()函数将缓存中的数据输出到网络端口。
+
+     ![img](images/8f73f65d2ce44ef299b9aa6e15d74168.png)
+
+     **整个过程涉及2次CPU拷贝、2次DMA拷贝总共4次拷贝，以及4次上下文切换。**
+
+     > 上下文切换：当用户程序向内核发起系统调用时，CPU将用户进程从用户态切换到内核态；当系统调用返回时，CPU将用户进程从内核态切换回用户态。
+     > CPU拷贝：由CPU直接处理数据的传送，数据拷贝时会一直占用CPU的资源。
+     > DMA拷贝：由CPU向DMA磁盘控制器下达指令，让DMA控制器来处理数据的传送，数据传送完毕再把信息反馈给CPU，从而减轻了CPU资源的占有率。
+
+   - **sendfile**
+
+     > sendfile系统调用在Linux内核版本2.1中被引入，目的是简化通过网络在两个通道之间进行的数据传输过程。sendfile系统调用的引入，不仅减少了CPU拷贝的次数，还减少了上下文切换的次数。
+
+     ![img](images/c8c3fd1948b94662b5a742a9e8312550.png)
+
+     > 通过sendfile系统调用，数据可以直接在内核空间内部进行I/O传输，从而省去了数据在用户空间和内核空间之间的来回拷贝。基于sendfile系统调用的零拷贝方式，整个拷贝过程会发生2次上下文切换，1次CPU拷贝和2次DMA拷贝。
+     >
+     > **sendfile存在的问题是用户程序不能对数据进行修改，而只是单纯地完成了一次数据传输过程。**
+
+   - **sendfile + DMA gather copy**
+
+     > Linux 2.4版本的内核对sendfile系统调用进行修改，为DMA拷贝引入了gather 操作。它将内核空间（kernel space）的读缓冲区（read buffer）中对应的数据描述信息（内存地址、地址偏移量）记录到相应的网络缓冲区（ socket buffer）中，由DMA根据内存地址、地址偏移量将数据批量地从读缓冲区（read buffer）拷贝到网卡设备中，这样就省去了内核空间中仅剩的1次CPU拷贝操作。
+
+     ![img](images/998a1ed40c254b88a8ab0a9bc2dfa290.png)
+
+     > 在硬件的支持下，sendfile拷贝方式不再从内核缓冲区的数据拷贝到socket缓冲区，取而代之的仅仅是缓冲区文件描述符和数据长度的拷贝，这样DMA引擎直接利用gather操作将页缓存中数据打包发送到网络中即可。
+     >
+     > 基于sendfile + DMA gather copy 系统调用的零拷贝方式，整个拷贝过程会发生2次上下文切换、0次CPU拷贝以及2次DMA拷贝。
+     >
+     > sendfile + DMA gather copy 拷贝方式同样存在用户程序不能对数据进行修改的问题，而且本身需要硬件的支持，它只适用于将数据从文件拷贝到socket套接字上的传输过程。
+
+   - **mmap + write**
+
+     > 一种零拷贝方式是使用mmap + write 代替原来的 read + write 方式，减少了1次CPU拷贝操作。mmap是Linux提供的一种内存映射文件方法，即将一个进程的地址空间中的一段虚拟地址映射到磁盘文件地址。
+
+     ![img](images/045d9d3132ea44808193e35c7785ee88.png)
+
+     > 使用mmap的目的是将内核中读缓冲区（read buffer）的地址与用户空间的缓冲区（user buffer）进行映射，从而实现内核缓冲区与应用程序内存的共享，省去了将数据从内核读缓冲区（read buffer）拷贝到用户缓冲区（user buffer）的过程，然而内核读缓冲区（read buffer）仍需将数据到内核写缓冲区（socket buffer）。
+     >
+     > **基于mmap + write 系统调用的零拷贝方式，整个拷贝过程会发生4次上下文切换，1次CPU 拷贝和2次DMA拷贝。**
+     >
+     > mmap主要的用处是提高I/O性能，特别是针对大文件。对于小文件，内存映射文件反而会导致碎片空间的浪费，因为内存映射总是要对齐页边界，最小单位是4 KB，一个5 KB的文件将会映射占用8 KB内存，也就会浪费3 KB内存。
+     >
+     > mmap的拷贝虽然减少了1次拷贝，提升了效率，但也存在一些隐藏的问题。当mmap一个文件时，如果这个文件被另一个进程所截获，那么write系统调用会因为访问非法地址被SIGBUS信号终止，SIGBUS默认会杀死进程并产生一个coredump，服务器可能因此被终止。
+
+   - **splice**
+
+     > sendfile只适用于将数据从文件拷贝到socket套接字上，同时需要硬件的支持，这也限定了它的使用范围。Linux在2.6.17版本引入splice系统调用，不仅不需要硬件支持，还实现了两个文件描述符之间的数据零拷贝。
+
+     ![img](images/a9e311bbb38e4ed9a1c4da98dbcf2388.png)
+
+     > splice系统调用可以在内核空间的读缓冲区（read buffer）和网络缓冲区（socket buffer）之间建立管道（pipeline），从而避免了两者之间的CPU拷贝操作。
+     >
+     > **基于splice系统调用的零拷贝方式，整个拷贝过程会发生2次上下文切换，0次CPU拷贝以及2次DMA拷贝。**
+     >
+     > splice拷贝方式也同样存在用户程序不能对数据进行修改的问题。除此之外，它使用了Linux的管道缓冲机制，可以用于任意两个文件描述符中传输数据，但是它的两个文件描述符参数中有一个必须是管道设备。
+
+     ![在这里插入图片描述](images/508fe7f721b94ac39e86f23b714b391c.png)
+
+     > 在Kafka中消息存储模式中，数据存储在底层文件系统中。当有Consumer订阅了相应的Topic消息，数据需要从磁盘中读取然后将数据写回到套接字中（Socket）。此动作看似只需较少的CPU活动，但它的效率非常低：首先内核读出全盘数据，然后将数据跨越内核用户推到应用程序，然后应用程序再次跨越内核用户将数据推回，写出到套接字。
+     >
+     > Kafka Consumer执行上述过程中，使用了Java类库java.nio.channels.FileChannel中的transferTo()方法来实现零拷贝，transferTo()方法将数据从文件通道传输到了给定的可写字节通道。在内部，它依赖底层操作系统对零拷贝的支持；在UNIX 和各种Linux系统中，此调用被传递到sendfile()系统调用中。
+     >
+     > 所以，如果底层网络接口卡支持收集操作的话，Kafka Consumer实现零拷贝的方式为sendfile + DMA gather copy，否则为sendfile。
+
+2. **Page Cache(页缓存)+磁盘顺序写**
+
+   操作系统本身有一层缓存，叫做page cache，是在内存里的缓存，我们也可以称之为os cache，意思就是操作系统自己管理的缓存。
+
+   你在写入磁盘文件的时候，可以直接写入这个os cache里，也就是仅仅写入内存中，接下来由操作系统自己决定什么时候把os cache里的数据真的刷入磁盘文件中。
+
+   仅仅这一个步骤，就可以将磁盘文件写性能提升很多了，因为其实这里相当于是在写内存，不是在写磁盘。
+   ![在这里插入图片描述](images/2d2f44793aea40b3a2027538a175ebb0.png)
+
+   同时，Page Cache将数据flush到磁盘的时候，Kafka是以磁盘顺序写的方式来写的。也就是说，仅仅将数据追加到文件的末尾，不是在文件的随机位置来修改数据，避免了磁盘随机写性能差的问题。
+
+   另外，Kafka读取数据的时候，也会先检查下Page Cache里是否存在待检索数据，若有则直接返回，否则再走零拷贝I/O流程。所以，如果Kafka的生产者和消费者的数据速率差不多时，会发现大量的数据都是直接写入os cache中，然后读数据的时候也是从os cache中读。相当于是Kafka完全基于内存提供数据的写和读，Page Cache实现了数据的“空中接力”。
+
+   Kafka利用了操作系统本身的Page Cache，而没有使用JVM的空间内存。主要是：
+
+   避免Object消耗：如果是使用Java堆，Java对象的内存消耗比较大，通常是所存储数据的两倍甚至更多。
+   避免GC问题：随着JVM中数据不断增多，垃圾回收将会变得复杂与缓慢，使用系统缓存就不会存在GC问题。
+   同时，相比于使用JVM或in-memory cache等数据结构，利用操作系统的Page Cache更加简单可靠。首先，操作系统层面的缓存利用率会更高，因为存储的都是紧凑的字节结构而不是独立的对象。其次，操作系统本身也对于Page Cache做了大量优化，提供了write-behind、read-ahead以及flush等多种机制。再者，即使服务进程重启，系统缓存依然不会消失，避免了in-process cache重建缓存的过程。
+
+3. **分区分段+索引**
+
+   Kafka的message是按topic分类存储的，topic中的数据又是按照一个一个的partition即分区存储到不同broker节点。每个partition对应了操作系统上的一个文件夹，partition实际上又是按照segment分段存储的。这也非常符合分布式系统分区分桶的设计思想。
+
+   通过这种分区分段的设计，Kafka的message消息实际上是分布式存储在一个一个小的segment中的，每次文件操作也是直接操作的segment。为了进一步的查询优化，Kafka又默认为分段后的数据文件建立了稀疏索引文件，就是文件系统上的.index文件。这种分区分段+索引的设计，不仅提升了数据读取的效率，同时也提高了数据操作的并行度。
+
+4. **批量读写**
+
+   Kafka数据读写也是批量的而不是单条的。
+
+   除了利用底层的技术外，Kafka还在应用程序层面提供了一些手段来提升性能。最明显的就是使用批次。在向Kafka写入数据时，可以启用批次写入，这样可以避免在网络上频繁传输单个消息带来的延迟和带宽开销。假设网络带宽为10MB/S，一次性传输10MB的消息比传输1KB的消息10000万次显然要快得多。
+
+5. **批量压缩**
+
+   Kafka使用了批量压缩，多个消息一起压缩。降低网络带宽。Kafka允许使用递归的消息集合，批量的消息可以通过压缩的形式传输并且在日志中也可以保持压缩格式，直到被消费者解压缩。
+
+   当然，消息的压缩和解压缩需要消耗一定的CPU资源，用户需要均衡好CPU和带宽的关系。
+
