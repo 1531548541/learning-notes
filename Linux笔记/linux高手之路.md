@@ -1,3 +1,36 @@
+# VM配置静态ip
+
+| 环境   | version                  |
+| ------ | ------------------------ |
+| centos | CentOS-7-x86_64-DVD-2009 |
+
+~~~sh
+#1.修改网络配置
+vi /etc/sysconfig/network-scripts/ifcfg-ens33
+~~~
+
+![image-20220902143541087](images/image-20220902143541087.png)
+
+~~~sh
+#2.重启网络
+systemctl restart network
+~~~
+
+3.修改VM配置
+
+![image-20220902143805437](images/image-20220902143805437.png)
+
+![image-20220902144025535](images/image-20220902144025535.png)
+
+![image-20220902144110025](images/image-20220902144110025.png)
+
+~~~sh
+#4.验证
+ip addr
+~~~
+
+
+
 # 防火墙、端口相关
 
 ~~~sh
