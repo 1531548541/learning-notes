@@ -9,7 +9,7 @@
 vi /etc/sysconfig/network-scripts/ifcfg-ens33
 ~~~
 
-![image-20220902143541087](images/image-20220902143541087.png)
+![image-20220906163549077](images/image-20220906163549077.png)
 
 ~~~sh
 #2.重启网络
@@ -27,6 +27,17 @@ systemctl restart network
 ~~~sh
 #4.验证
 ip addr
+~~~
+
+# VM克隆
+
+**注意：克隆之后注意要将mac重新生成，此时ip和源主机一样，所以先别登源主机，改完ip再登。**
+
+![image-20220906153521772](images/image-20220906153521772.png)
+
+~~~sh
+#修改ip
+vi /etc/sysconfig/network-scripts/ifcfg-ens33
 ~~~
 
 
