@@ -55,7 +55,14 @@ firewall-cmd --query-port=80/tcp
 firewall-cmd --reload
 #关闭防火墙
 systemctl stop firewalld.service
+
+#查看
+netstat -nlpt
 ~~~
+
+
+
+
 
 # rpm
 
@@ -83,12 +90,4 @@ unzip a*.zip
 unzip -j wt.zip
 ~~~
 
-
-
-# Kafka
-
-~~~sh
-#创建分区
-bin/kafka-topics.sh --create --topic topicname --replication-factor 1 --partitions 1 --zookeeper localhost:2181
-~~~
 

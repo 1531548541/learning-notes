@@ -1,3 +1,103 @@
+# 常用命令
+
+- 基础命令
+
+  ~~~sh
+  # 创建容器
+  kubectl create deployment/deploy 这次部署的名字 --image=应用的镜像
+  kubectl create deploy my-nginx --port=80 --replicas=3 -- date --image=nginx
+  # Create a deployment with command
+  kubectl create deployment my-nginx --image=nginx -- date
+  
+  #也可以独立跑一个Pod
+  kubectl run nginx --image=nginx
+  
+  ###注意！！！：kubectl run（无自愈功能）：直接启动一个pod；不会产生一次部署信息。所以删除就没。
+  #kubectl create deploy（有自愈功能）： 启动一个Pod，以及记录这次部署信息。所以，这个pod即使挂了，这次部署信息有，就会强制同步到这次部署信息期望的最终结果；kubectl get deploy,pod 都有内容。
+  
+  ##最终在一个机器上有pod、这个pod其实本质里面就是一个容器
+  k8s_nginx_my-nginx-6b74b79f57-snlr4_default_dbeac79e-1ce9-42c9-bc59-c8ca0412674b_0
+  ### k8s_镜像(nginx)_pod名(my-nginx-6b74b79f57-snlr4)_容器名(default_dbeac79e-1ce9-42c9-bc59-c8ca0412674b_0)
+  
+  #进入容器（老版可以不带--）
+  kubectl exec -it [name] -- /bin/bash
+  #删除pod
+  kubectl delete pod xx
+  
+  #======================= kubectl get 资源类型=========================
+  
+  #获取类型为Deployment的资源列表
+  kubectl get deployments
+  
+  #查看所有容器
+  kubectl get all
+  
+  #查看所有pod（类似docker ps -a）
+  kubectl get pod -A
+  #查看我们自己的pod
+  kubectl get pods
+  kubectl get pod -o wide  #详情
+  
+  #获取类型为Node的资源列表
+  kubectl get nodes
+  # 查看所有名称空间的 Deployment
+  kubectl get deployments -A
+  kubectl get deployments --all-namespaces
+  # 查看 kube-system 名称空间的 Deployment
+  kubectl get deployments -n kube-system
+  
+  #####并不是所有的对象都在名称空间中
+  # 在名称空间里
+  kubectl api-resources --namespaced=true
+  # 不在名称空间里
+  kubectl api-resources --namespaced=false
+  
+  #======================= kubectl describe 显示有关资源的详细信息=========================
+  # kubectl describe 资源类型 资源名称
+  
+  #查看名称为nginx-XXXXXX的Pod的信息
+  kubectl describe pod nginx-XXXXXX	
+  
+  #查看名称为nginx的Deployment的信息
+  kubectl describe deployment my-nginx	
+  
+  #=======================kubectl logs - 查看pod中的容器的打印日志=========================
+  # kubectl logs Pod名称
+  kubectl logs -f nginx-pod-XXXXXXX
+  ~~~
+
+- 弹性扩/缩容
+
+  ~~~sh
+  ## 扩容的Pod会自动加入到他之前存在的Service（负载均衡网络）
+  kubectl scale --replicas=3  deployment tomcat6
+  #持续观测效果
+  watch kubectl get pods -o wide
+  ~~~
+
+- 向外暴露端口，达到多pod负载均衡
+
+  > **此处一定要注意是否是公网ip ！！！！！**
+
+  ~~~sh
+  kubectl expose deployment tomcat6 --port=8912 --target-port=8080 --type=NodePort
+   
+  ## --port：集群内访问service的端口 8912
+  ## --target-port： pod容器的端口 8080
+  ## --type： 暴露类型,四选一
+                     "ClusterIP":集群只有一个端口
+  				   "ExternalName":
+  				   "LoadBalancer":
+  				   "NodePort":每个node都有各自port，这样可以通过node的公网访问
+   
+  ## 进行验证
+  kubectl get svc 
+  curl ip:port
+   
+  ## kubectl exec 进去pod修改，并测试负载均衡
+  ~~~
+
+  
 
 # Kubernetes简介
 
@@ -802,30 +902,6 @@ worker节点：
 - kubectl create deploy xxxxxx  ：命令行会给api-server发送要部署xxx的请求
 - api-server把这个请求保存到etcd
 
-
-
-```sh
-# kubectl create 帮我们创建k8s集群中的一些对象
-kubectl create --help
-kubectl create deployment 这次部署的名字 --image=应用的镜像
-#Create a deployment named  my-nginx that runs the nginx image
-kubectl create deployment my-nginx --image=nginx
-
-##最终在一个机器上有pod、这个pod其实本质里面就是一个容器
-k8s_nginx_my-nginx-6b74b79f57-snlr4_default_dbeac79e-1ce9-42c9-bc59-c8ca0412674b_0
-### k8s_镜像(nginx)_pod名(my-nginx-6b74b79f57-snlr4)_容器名(default_dbeac79e-1ce9-42c9-bc59-c8ca0412674b_0)
-
-# Create a deployment with command
-kubectl create deployment my-nginx --image=nginx -- date
-
-# Create a deployment named my-nginx that runs the nginx image with 3 replicas.
-kubectl create deployment my-nginx --image=nginx --replicas=3
-
-# Create a deployment named my-nginx that runs the nginx image and expose port 80.
-kubectl create deployment my-nginx --image=nginx --port=80
-
-```
-
 >  **Deployment（部署）**
 >
 > - 在k8s中，通过发布 Deployment，可以创建应用程序 (docker image) 的实例 (docker container)，这个实例会被包含在称为 **Pod** 的概念中，**Pod** 是 k8s 中最小可管理单元。
@@ -838,7 +914,7 @@ kubectl create deployment my-nginx --image=nginx --port=80
 
 自愈：针对使用Deployment等部署的应用。
 
-kubectl run ：直接启动一个pod； 不会产生一次部署信息。所以删除就没
+**kubectl run ：直接启动一个pod； 不会产生一次部署信息。所以删除就没**
 
 kubectl create deploy： **启动一个Pod**，以及**记录这次部署信息**。所以，这个pod即使挂了，这次部署信息有，就会强制同步到这次部署信息期望的最终结果；kubectl get deploy,pod 都有内容
 
@@ -912,103 +988,6 @@ calico：网络组件:
 
 
 
-### 3、故障排除
-
-- **kubectl get** - 显示资源列表
-
-  - ```sh
-    # kubectl get 资源类型
-    
-    #获取类型为Deployment的资源列表
-    kubectl get deployments
-    
-    #获取类型为Pod的资源列表
-    kubectl get pods
-    
-    #获取类型为Node的资源列表
-    kubectl get nodes
-    ```
-
-  - ```sh
-    # 查看所有名称空间的 Deployment
-    kubectl get deployments -A
-    kubectl get deployments --all-namespaces
-    # 查看 kube-system 名称空间的 Deployment
-    kubectl get deployments -n kube-system
-    ```
-
-  - ```sh
-    #####并不是所有的对象都在名称空间中
-    
-    # 在名称空间里
-    kubectl api-resources --namespaced=true
-    
-    # 不在名称空间里
-    kubectl api-resources --namespaced=false
-    ```
-
-- **kubectl describe** - 显示有关资源的详细信息
-
-  - ```sh
-    # kubectl describe 资源类型 资源名称
-    
-    #查看名称为nginx-XXXXXX的Pod的信息
-    kubectl describe pod nginx-XXXXXX	
-    
-    #查看名称为nginx的Deployment的信息
-    kubectl describe deployment my-nginx	
-    ```
-
-    
-
-- **kubectl logs** - 查看pod中的容器的打印日志（和命令docker logs 类似）
-
-  - ```sh
-    # kubectl logs Pod名称
-    
-    #查看名称为nginx-pod-XXXXXXX的Pod内的容器打印的日志
-    #本案例中的 nginx-pod 没有输出日志，所以您看到的结果是空的
-    kubectl logs -f nginx-pod-XXXXXXX
-    ```
-
-- **kubectl exec** - 在pod中的容器环境内执行命令(和命令docker exec 类似)
-
-  - ```sh
-    # kubectl exec Pod名称 操作命令
-    
-    # 在名称为nginx-pod-xxxxxx的Pod中运行bash
-    kubectl exec -it nginx-pod-xxxxxx /bin/bash
-    
-    ### 注意：新版1.21.0 提示这个命令会过期
-    ```
-
-
-
-### 4、kubectl run
-
-也可以独立跑一个Pod
-
-```sh
-## kubectl run --help
-kubectl run nginx --image=nginx
-```
-
-总结：
-
-```sh
-kubectl create 资源  #创建任意资源
-kubectl create deploy #创建部署
-kubectl run #只创建一个Pod
-kubectl get 资源名(node/pod/deploy) -n xxx（指定名称空间，默认是default） #获取资源
-kubectl describe  资源名(node/pod/deploy)  xxx #描述某个资源的详细信息
-kubectl logs 资源名 ##查看日志
-kubectl exec -it pod名 -- 命令  #进pod并执行命令
-kubectl delete 资源名(node/pod/deploy) xxx  #删除资源
-
-```
-
-
-
 
 
 ## 3、应用外部可见
@@ -1052,59 +1031,9 @@ Service 匹配一组 Pod 是使用 [标签(Label)和选择器(Selector)](https:/
 
 
 
-### 4、kubectl expose
+## 滚动升级
 
-```sh
- kubectl expose deployment tomcat6 --port=8912 --target-port=8080 --type=NodePort
- 
- ## --port：集群内访问service的端口 8912
- ## --target-port： pod容器的端口 8080
- ## --nodePort： 每个机器开发的端口 30403
- 
- 
- ## 进行验证
- kubectl get svc 
- curl ip:port
- 
- kubectl expose  #暴露，成一个负载均衡网络
- ## kubectl exec 进去pod修改，并测试负载均衡
-```
-
-
-
-## 4、伸缩应用程序-扩缩容
-
-**目标**
-
-- 用 kubectl 扩缩应用程序
-- 扩缩一个 Deployment
-
-我们创建了一个 [Deployment ](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/)，然后通过 [服务](https://kubernetes.io/docs/concepts/services-networking/service/)提供访问 Pod 的方式。我们发布的 Deployment 只创建了一个 Pod 来运行我们的应用程序。当流量增加时，我们需要对应用程序进行伸缩操作以满足系统性能需求。
-
-![1619086037936](assets/1619086037936.png)
-
-
-
-```sh
-## 扩展
-## 扩容的Pod会自动加入到他之前存在的Service（负载均衡网络）
-kubectl scale --replicas=3  deployment tomcat6
-
-#持续观测效果
-watch kubectl get pods -o wide
-```
-
-
-
-## 5、执行滚动升级
-
-**目标**
-
-- 使用 kubectl 执行滚动更新
-
-> *滚动更新允许通过使用新的实例逐步更新 Pod 实例从而实现 Deployments 更新，停机时间为零。*
-
-与应用程序扩展类似，如果暴露了 Deployment，服务（Service）将在更新期间仅对可用的 pod 进行负载均衡。可用 Pod 是应用程序用户可用的实例。
+与应用程序扩展类似，如果暴露了 Deployment，服务（Service）将在更新期间仅对可用的 pod 进行负载均衡。
 
 滚动更新允许以下操作：
 
@@ -1112,21 +1041,7 @@ watch kubectl get pods -o wide
 - 回滚到以前的版本
 - 持续集成和持续交付应用程序，无需停机
 
-![img](assets/module_06_rollingupdates1.svg)
-
-
-
-![img](assets/module_06_rollingupdates2.svg)
-
-
-
-![img](assets/module_06_rollingupdates3.svg)
-
-
-
-![img](assets/module_06_rollingupdates4.svg)
-
-
+1.通过命令滚动升级
 
 ```sh
 #应用升级: tomcat:alpine、tomcat:jre8-alpine
@@ -1146,23 +1061,17 @@ kubectl rollout undo deployment.apps/tomcat6 --to-revision=1
 kubectl rollout undo deploy tomcat6 --to-revision=1
 ```
 
+2.通过yml
 
+修改一下 yml中的image
 
-命令：记的太多
-
-声明式API；
-
-对象描述文件的方式；Pod --》 yaml ，  Deploy--》yaml  ，  Service --》 yaml
-
-kubectl apply -f  xxx.yaml .；
-
-用文件固化操作。移植性增加
+kubectl apply -f xx.yml
 
 
 
-## 6、以上用配置文件方式
+## 配置文件方式
 
-### 1、部署一个应用
+### 部署一个应用
 
 ```yaml
 apiVersion: apps/v1	#与k8s集群版本有关，使用 kubectl api-versions 即可查看当前集群支持的版本
@@ -1189,9 +1098,7 @@ spec:	        #这是关于该Deployment的描述，可以理解为你期待该D
 
 > kubectl apply -f xxx.yaml
 
-
-
-### 2、暴露应用
+### 暴露应用
 
 ```yaml
 apiVersion: v1
@@ -1213,29 +1120,7 @@ spec:	    #这是关于该 Service 的定义，描述了 Service 如何选择 Po
 
 ```
 
-
-
-### 3、扩缩容
-
-修改deployment.yaml 中的 replicas 属性即可
-
-
-
-完成后运行  kubectl apply -f xxx.yaml
-
-### 4、滚动升级
-
-修改deployment.yaml 中的 imageName 属性等
-
-
-
-完成后运行  kubectl apply -f xxx.yaml
-
-
-
-> 以上都可以直接 kubectl edit deploy/service 等，修改完成后自动生效
-
-# 四、其他
+# 其他
 
 ## 1、查看Kubernetes适配的docker版本
 
