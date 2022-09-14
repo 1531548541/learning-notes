@@ -56,11 +56,18 @@ firewall-cmd --reload
 #关闭防火墙
 systemctl stop firewalld.service
 
-#查看
+#查看端口
 netstat -nlpt
 ~~~
 
 
+
+# grep
+
+~~~sh
+#查看xx文件xx内容后的20行
+cat xx.conf | grep xx -A 20
+~~~
 
 
 
