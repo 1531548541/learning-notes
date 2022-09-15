@@ -60,6 +60,19 @@ systemctl stop firewalld.service
 netstat -nlpt
 ~~~
 
+# vi
+
+~~~sh
+#删除某一行
+dd
+#删除全部
+d+G
+#复制当前行
+yy复制当前行，在合适的位置，p粘贴
+#复制n行
+nyy复制n行（n=1,2,3...），在合适的位置，p粘贴
+~~~
+
 
 
 # grep
