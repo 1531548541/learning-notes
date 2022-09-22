@@ -68,6 +68,8 @@
   kubectl get pod --show-labels 
   #为xx打标签
   kubectl label pods tomcat111 zfc=db
+  #删除标签
+  kubectl label pod toncat111 zfc-
   ~~~
 
 - kubectl explain xxx：解析一个资源该怎么编写yml    (类似--help)
