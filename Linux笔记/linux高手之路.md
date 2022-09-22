@@ -110,4 +110,13 @@ unzip a*.zip
 unzip -j wt.zip
 ~~~
 
+# 实用命令
+
+清缓存
+
+~~~sh
+#清理前最好sync一下，防止正在运行的程序崩溃
+sync
+echo 3 > /proc/sys/vm/drop_caches
+~~~
 
