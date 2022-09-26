@@ -1273,7 +1273,7 @@ c862f1e9a0562de2384dbc/merged",
        "UpperDir": （镜像的上层可以感知变
 化）"/var/lib/docker/overlay2/41e4fa41a2ad1dca9616d4c8254a04c4d9d6a3d
 462c862f1e9a0562de2384dbc/diff",【容器的修改后的文件，保存再宿主机哪里呀。
-容器删除后，那些容器目录还存在吗？一定不再】
+容器删除后，那些容器目录还存在吗？一定不在】
        "WorkDir":
 "/var/lib/docker/overlay2/41e4fa41a2ad1dca9616d4c8254a04c4d9d6a3d462
 c862f1e9a0562de2384dbc/work"
@@ -1323,11 +1323,7 @@ CMD python /app/app.py
 >
 > 每一层只是与上一层不同的一组。 这些层彼此堆叠。
 >
-> 创建新容器时，可以在基础层之上添加一个新的可写层。 该层通常称为“容器层”。 对运行中
->
-> 的容器所做的所有更改（例如写入新文件，修改现有文件和删除文件）都将写入此薄可写容
->
-> 器层。
+> 创建新容器时，可以在基础层之上添加一个新的可写层。 该层通常称为“容器层”。 对运行中的容器所做的所有更改（例如写入新文件，修改现有文件和删除文件）都将写入此薄可写容器层。
 
 ![image-20220926103602087](images/image-20220926103602087.png)
 
@@ -1335,11 +1331,7 @@ CMD python /app/app.py
 
 > - 容器和镜像之间的主要区别是可写顶层。
 > - 在容器中添加新数据或修改现有数据的所有写操作都存储在此可写层中。
-> - 删除容器后，可写层也会被删除。 基础图像保持不变。 因为每个容器都有其自己的可写容
->
->  器层，并且所有更改都存储在该容器层中，所以多个容器可以共享对同一基础映像的访问，
->
->  但具有自己的数据状态。
+> - 删除容器后，可写层也会被删除。 基础图像保持不变。 因为每个容器都有其自己的可写容器层，并且所有更改都存储在该容器层中，所以多个容器可以共享对同一基础映像的访问，但具有自己的数据状态。
 
 - 下图显示了共享同一Ubuntu 15.04映像的多个容器。
 
@@ -1355,17 +1347,13 @@ CMD python /app/app.py
 >
 > 多个容器可以共享部分或全部只读图像数据。
 >
-> 从同一图像开始的两个容器共享100％的只读数据，而具有不同图像的两个容器（具有相同的层）共享这些公共
->
-> 层。 因此，不能只对虚拟大小进行总计。这高估了总磁盘使用量，可能是一笔不小的数目。
+> 从同一图像开始的两个容器共享100％的只读数据，而具有不同图像的两个容器（具有相同的层）共享这些公共层。 因此，不能只对虚拟大小进行总计。这高估了总磁盘使用量，可能是一笔不小的数目。
 
 #### 4、镜像如何挑选
 
 > busybox：是一个集成了一百多个最常用Linux命令和工具的软件。linux工具里的瑞士军刀
 >
-> alpine：Alpine操作系统是一个面向安全的轻型Linux发行版经典最小镜像，基于busybox，功能比
->
-> Busybox完善。
+> alpine：Alpine操作系统是一个面向安全的轻型Linux发行版经典最小镜像，基于busybox，功能比Busybox完善。
 >
 > slim：docker hub中有些镜像有slim标识，都是瘦身了的镜像。也要优先选择
 >
@@ -1389,13 +1377,13 @@ CMD python /app/app.py
 
 3）、可以把数据挂载到内存中。
 
---mount 挂载到 linux宿主机，手动挂载（不用了）
+--mount 挂载到 linux宿主机，手动挂载（**不用了**）
 
 -v 可以自动挂载，到linux主机或者docker自动管理的这一部分区域
 
-- Volumes(卷) ：存储在主机文件系统的一部分中，该文件系统由Docker管理（在Linux上是“ / var /lib / docker / volumes /”）。 非Docker进程不应修改文件系统的这一部分。 卷是在Docker中持久存储数据的最佳方法。
+- Volumes(卷) ：存储在主机文件系统的一部分中，该文件系统由Docker管理（在Linux上是“ /var/lib/docker/ volumes/”）。 非Docker进程不应修改文件系统的这一部分。 **卷是在Docker中持久存储数据的最佳方法**。
 - Bind mounts(绑定挂载) 可以在任何地方 存储在主机系统上。 它们甚至可能是重要的系统文件或目录。 Docker主机或Docker容器上的非Docker进程可以随时对其进行修改。
-- tmpfs mounts(临时挂载) 仅存储在主机系统的内存中，并且永远不会写入主机系统的文件系统
+- tmpfs mounts(临时挂载) 仅存储在主机系统的内存中，并且永远不会写入主机系统的文件系统。
 
 #### 1、volume(卷)
 
@@ -1418,9 +1406,9 @@ docker run -dP -v nginx:/etc/nginx nginx
 >
 > 如果启动一个容器并指定一个尚不存在的卷，则会创建一个空卷。
 
--v 宿主机绝对路径:Docker容器内部绝对路径：叫挂载；这个有空挂载问题
+`-v 宿主机绝对路径:Docker容器内部绝对路径：叫挂载；`**这个有空挂载问题**
 
--v 不以/开头的路径:Docker容器内部绝对路径：叫绑定（docker会自动管理，docker不会把他当成目录，而把它当前卷）
+`-v 不以/开头的路径:Docker容器内部绝对路径：叫绑定（docker会自动管理，docker不会把他当成目录，而把它当成卷）`
 
 **以上用哪个比较好？？？？？？**
 
@@ -1453,8 +1441,7 @@ docker run -dP -v /usr/share/nginx/html nginx
 ### 2、把这个卷和容器内部目录绑定
 ### 3、容器启动以后，目录里面的内容就在卷里面存着；
 ##### -v nginxhtml:/usr/share/nginx/html 也可以以下操作
-## 1、 docker create volume nginxhtml 如果给卷里面就行修改，容器内部的也就改
-了。
+## 1、 docker create volume nginxhtml 如果给卷里面就行修改，容器内部的也就改了。
 ## 2、 docker volume inspect nginxhtml
 ## 3、docker run -d -P -v nginxhtml:/usr/share/nginx/html --
 # docker inspect 容器的时候可以看到
@@ -1462,7 +1449,7 @@ docker run -dP -v /usr/share/nginx/html nginx
      {
         "Type": "volume", //这是个卷
         "Name": "html",  //名字是html
-        "Source": "/var/lib/docker/volumes/html/_data",  //宿主机的目录。容器里面的哪两个文件都在
+        "Source": "/var/lib/docker/volumes/html/_data",  //宿主机的目录。容器里面的那两个文件都在
         "Destination": "/usr/share/nginx/html",  //容器内部
         "Driver": "local",
         "Mode": "z",
@@ -1477,17 +1464,9 @@ docker volume  #可以对docker自己管理的卷目录进行操作；
 
 #### 2、bind mount
 
-> 如果将绑定安装或非空卷安装到存在某些文件或目录的容器中的目录中，则这些文件或目录会被
+> 如果将绑定安装或非空卷安装到存在某些文件或目录的容器中的目录中，则这些文件或目录会被安装遮盖。就像将文件保存到Linux主机上的/mnt中一样，然后将USB驱动器安装到/mnt中。在卸载USB驱动器之前，/mnt的内容将被USB驱动器的内容遮盖。 被遮盖的文件不会被删除或更改，但是在安装绑定安装或卷时将无法访问。
 >
-> 安装遮盖，就像您将文件保存到Linux主机上的/ mnt中一样，然后 将USB驱动器安装到/ mnt中。
->
-> 在卸载USB驱动器之前，/ mnt的内容将被USB驱动器的内容遮盖。 被遮盖的文件不会被删除或更
->
-> 改，但是在安装绑定安装或卷时将无法访问。
->
-> 总结：外部目录覆盖内部容器目录内容，但不是修改。所以谨慎，外部空文件夹挂载方式也会导
->
-> 致容器内部是空文件夹
+> 总结：外部目录覆盖内部容器目录内容，但不是修改。所以谨慎，外部空文件夹挂载方式也会导致容器内部是空文件夹。（`空挂载问题`）
 
 ```text
 docker run -dP -v /my/nginx:/etc/nginx nginx
@@ -1502,7 +1481,7 @@ docker run -dP -v /my/nginx:/etc/nginx nginx
 # 一行命令启动nginx，并且配置文件和html页面。需要知道卷的位置才能改 
 docker run -d -P -v nginxconf:/etc/nginx/ -v nginxpage:/usr/share/nginx/html nginx 
 # 想要实现 docker run -d -P -v /root/nginxconf:/etc/nginx/ -v /root/nginxhtml:/usr/share/nginx/html --name=nginx999 nginx 
-### 1、提前准备好东西 目录nginxconf，目录里面的配置we年都放里面，，再调用命令 
+### 1、提前准备好东西 目录nginxconf，目录里面的配置文件都放里面，再调用命令 
 ### 2、docker cp nginxdemo:/etc/nginx /root/nginxconf #注意/的使用 
 ### 3、docker run -d -P -v /root/nginxconf:/etc/nginx/ -v /root/nginxhtml:/usr/share/nginx/html --name=nginx999 nginx
 ```
@@ -1533,7 +1512,7 @@ docker cp [OPTIONS] SRC_PATH|- CONTAINER:DEST_PATH：把外部的复制进去
     # 复制index.html 到nginx的/usr/share/nginx/html/test/(test目录不存在)目录下
     # 不以斜杠结尾
     docker cp index.html nginx:/usr/share/nginx/html/test
-    # 文件名为 test 内容为index.html内容
+    # 文件名为test，内容为index.html内容
     ```
 
   - DEST_PATH 不存在并且以 / 结尾：报错
@@ -1574,7 +1553,7 @@ docker cp [OPTIONS] SRC_PATH|- CONTAINER:DEST_PATH：把外部的复制进去
     docker cp testdir nginx:/usr/share/nginx/html
     ```
 
-  - DEST_PATH 存在是文件：报错
+  - DEST_PATH 存在，是文件：报错
 
     ```sh
     # 如果容器内testdir2是文件，会报错
@@ -1673,7 +1652,7 @@ ifconfig | grep docker
 >
 > 2） 每个容器实例内部也有一块网卡，每个接口叫eth0；
 >
-> 3）docker0上面的每个veth匹配某个容器实例内部的eth0，两两配对，一一匹配。
+> 3）docker0上面的每个veth匹配某个容器实例内部的eth0，两两配对，一 一匹配。
 >
 > 通过上述，将宿主机上的所有容器都连接到这个内部网络上，两个容器在同一个网络下,会从这个网关下各自拿到分配的ip，此时两个容器的网络是互通的。
 >
@@ -1695,7 +1674,7 @@ ip addr
 
 直接使用宿主机的 IP 地址与外界进行通信，不再需要额外进行NAT 转换。
 
-容器将 不会获得 一个独立的Network Namespace， 而是和宿主机共用一个Network Namespace。 容器将不会虚拟出自己的网卡而是使用宿主机的IP和端口。
+容器将不会获得 一个独立的Network Namespace， 而是和宿主机共用一个Network Namespace。 容器将不会虚拟出自己的网卡而是使用宿主机的IP和端口。
 
 ![image-20220926104057964](images/image-20220926104057964.png)
 
@@ -1760,7 +1739,7 @@ ip addr
 
 #### 4、container
 
-新建的容器和已经存在的一个容器共享一个网络ip配置而不是和宿主机共享。新创建的容器不会创建自己的网卡，配置自己的IP，而是和一个指定的容器共享IP、端口范围等。同样，两个容器除了网络方面，其他的如文件系统、进程列表等还是隔离的。
+新建的容器和已经存在的一个容器共享一个网络ip配置而不是和宿主机共享。新创建的容器不会创建自己的网卡、配置自己的IP，而是和一个指定的容器共享IP、端口范围等。同样，两个容器除了网络方面，其他的如文件系统、进程列表等还是隔离的。
 
 ![image-20220926104312299](images/image-20220926104312299.png)
 
@@ -1779,7 +1758,7 @@ ip addr
 > # eth0消失了
 > ```
 
-#### [#](https://blog.xueqimiao.com/docker/fb1375/#_5、自定义网络)5、自定义网络
+#### 5、自定义网络
 
 **link 已过时**
 
@@ -1822,8 +1801,7 @@ ip addr
 ### 4、端口映射
 
 ```sh
-docker create -p 3306:3306 -e MYSQL_ROOT_PASSWORD=123456 --name hello-mysql
-mysql:5.7
+docker create -p 3306:3306 -e MYSQL_ROOT_PASSWORD=123456 --name hello-mysql mysql:5.7
 ```
 
 ### 5、容器互联
@@ -1840,8 +1818,6 @@ cat /etc/hosts
 ping mysql
 ```
 
-
-
 ### 6、自定义网络（原理）
 
 #### 1、默认网络原理
@@ -1850,15 +1826,15 @@ Docker使用Linux桥接，在宿主机虚拟一个Docker容器网桥(docker0)，
 
 ![202206281715038](images/202206281715038.png)
 
-Linux虚拟网络技术。
+`Linux虚拟网络技术`:
 
 > Docker容器网络就很好的利用了Linux虚拟网络技术，在本地主机和容器内分别创建一个虚拟接口，并让
 >
 > 他们彼此联通（这样一对接口叫veth pair）；
 >
-> Docker中的网络接口默认都是虚拟的接口。虚拟接口的优势就是转发效率极高（因为Linux是在内核中进
+> Docker中的网络接口默认都是虚拟的接口。虚拟接口的优势就是转发效率极高（**因为Linux是在内核中进**
 >
-> 行数据的复制来实现虚拟接口之间的数据转发，无需通过外部的网络设备交换），对于本地系统和容器
+> **行数据的复制来实现虚拟接口之间的数据转发，无需通过外部的网络设备交换**），对于本地系统和容器
 >
 > 系统来说，虚拟接口跟一个正常的以太网卡相比并没有区别，只是他的速度快很多。
 
@@ -1880,7 +1856,7 @@ Linux虚拟网络技术。
 | host模式      | --net=host              | 容器和宿主机共享Network namespace                            |
 | 用户自定义    | --net=自定义网络        | 用户自己使用network相关命令定义网络,创建容器的时候可以指定为自己定义的网络 |
 
-#### [#](https://blog.xueqimiao.com/docker/fb1375/#_3、自建网络测试)3、自建网络测试
+#### 3、自建网络测试
 
 ```sh
 #1、docker0网络的特点。，
@@ -1933,11 +1909,11 @@ Docker 运行的基本流程为：
 | FROM        | 指定基础镜像                                                 |
 | MAINTAINER  | 指定维护者信息，已经**过时**，可以使用LABEL maintainer=xxx 来替代 |
 | LABEL       | 指定维护者信息 maintainer=xxx auth=xueqimiao a=b (语法 k=v ) |
-| RUN         | 运行命令 代表镜像构建过程中运行的命令                        |
-| CMD         | 指定启动容器时默认的命令 容器启动时要执行的命令              |
-| ENTRYPOINT  | 指定镜像的默认入口.运行命令                                  |
+| RUN         | 运行命令 代表**镜像构建过程中运行的命令**                    |
+| CMD         | 指定启动容器时默认的命令 **容器启动时要执行的命令**          |
+| ENTRYPOINT  | **指定镜像的默认入口.运行命令**                              |
 | EXPOSE      | 声明镜像内服务监听的端口                                     |
-| ENV         | 指定环境变量，可以在docker run的时候使用-e改变 会被固话到image的config里面 |
+| ENV         | 指定**环境变量**，可以在docker run的时候使用-e改变，会被固化到image的config里面 |
 | ADD         | 复制指定的src路径下的内容到容器中的dest路径下，src可以为url会自动下载，可以为tar文件，会自动解压 |
 | COPY        | 复制本地主机的src路径下的内容到镜像中的dest路径下，但不会自动解压等 |
 | LABEL       | 指定生成镜像的元数据标签信息                                 |
@@ -1952,11 +1928,11 @@ Docker 运行的基本流程为：
 
 ## 1、FROM
 
-**FROM 指定基础镜像，最好挑一些apline，slim之类的基础小镜像.指定一个已经存在的镜像作为模板，第一条必须是from**
+**FROM 指定基础镜像，最好挑一些apline，slim之类的基础小镜像.指定一个已经存在的镜像作为模板**，`第一条必须是from`
 
 **scratch镜像是一个空镜像，常用于多阶段构建**
 
-**如何确定我需要什么要的基础镜像？**
+**如何确定我需要的基础镜像？**
 
 - Java应用当然是java基础镜像（SpringBoot应用）或者Tomcat基础镜像（War应用）
 - JS模块化应用一般用nodejs基础镜像
@@ -2771,7 +2747,7 @@ sudo chmod +x /usr/local/bin/docker-compose
 
 docker-compose --version 
 
-# 如果是使用的 curl 方式来安装的
+# 如果是使用的 curl 方式来安装的，就这样卸载
 sudo rm /usr/local/bin/docker-compose
 ```
 
@@ -3057,7 +3033,7 @@ networks:
 
 
 
-### [#](https://blog.xueqimiao.com/docker/be83c7/#_3、zookeeper-compose-yml)3、zookeeper.compose.yml
+### 3、zookeeper.compose.yml
 
 ```yaml
 version: '2.0'
