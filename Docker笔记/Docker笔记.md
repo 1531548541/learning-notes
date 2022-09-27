@@ -376,7 +376,7 @@ docker tag 原镜像:标签 新镜像名:标签
 ### 17、docker prune
 
 ```sh
-# 移除游离镜像 dangling：游离镜像（没有镜像名字的）
+# 查看游离镜像 dangling：游离镜像（没有镜像名字的）
 docker image prune
 
 # 清理docker system
@@ -1981,6 +1981,8 @@ RUN yum -y install vim
 RUN ["可执行文件","参数1","参数2"]
 ```
 
+![image-20220927100137732](images/image-20220927100137732.png)
+
 ```sh
 # --no-cache 不使用缓存构建
 docker build --no-cache  -t myalpine:v111 -f D2 .
@@ -1989,63 +1991,20 @@ docker build --no-cache  -t myalpine:v111 -f D2 .
 
 
 ```sh
-# 不可以引用多个
 FROM alpine
-LABEL auth = xueqimiao
-# 指定构建参数
-ARG aaa=bbb
-# 指定环境变量
-ENV parm=xue
-# shell 形式 bash -c "echo 111 "
-RUN echo $parm
-# 可以取到 ARG
-RUN echo $aaa
-# exec 形式 $parm 默认取不到 取不出环境变量【ENV】，ARG也取不到
-RUN ["echo","$parm"]
-# RUN ["echo","$aaa"]
-# 都是可以启动容器的命令
-#CMD sleep 1;echo $parm;echo $aaa
-# 都是可以启动容器的命令
-ENTRYPOINT sleep 1;echo $parm;echo $aaa
+LABEL auth=wujie
+ARG name='zfc' 
+ENV msg='db'
+# shell* 形式； 
+RUN echo $name;echo ${name}
+# exec 形式: 
+RUN ["/bin/sh","-c","echo ${name}"]
+RUN ["/bin/sh","-c","echo $name"]
 ```
-
-
-
-```sh
-RUN <command> ( shell 形式, /bin/sh -c 的方式运行，避免破坏shell字符串)
-RUN ["executable", "param1", "param2"] ( exec 形式)
-RUN /bin/bash -c 'source $HOME/.bashrc; \
-echo $HOME'
-#上面等于下面这种写法
-RUN /bin/bash -c 'source $HOME/.bashrc; echo $HOME'
-RUN ["/bin/bash", "-c", "echo hello"]
-# 测试案例
-FROM alpine
-LABEL maintainer=xueqimiao xx=aa
-ENV msg='hello xueqimiao'
-RUN echo $msg
-RUN ["echo","$msg"]
-RUN /bin/sh -c 'echo $msg'
-RUN ["/bin/sh","-c","echo $msg"]
-CMD sleep 10000
-```
-
-
-
-> 总结； 由于[]不是shell形式，所以不能输出变量信息，而是输出$msg。其他任何/bin/sh -c 的形式都
->
-> 可以输出变量信息
->
-> 总结：什么是shell和exec形式
->
-> 1. shell 是 /bin/sh -c <command>的方式，
-> 2. exec ["/bin/sh","-c",command] 的方式== shell方式
->
-> 也就是exec 默认方式不会进行变量替换
 
 ## 4、CMD和ENTRYPOINT
 
-### [#](https://blog.xueqimiao.com/docker/5a17fc/#_1、都可以作为容器启动入口)1、都可以作为容器启动入口
+### 1、都可以作为容器启动入口
 
 CMD 的三种写法：
 
@@ -2054,8 +2013,6 @@ CMD ["executable","param1","param2"] ( exec 方式, 首选方式)
 CMD ["param1","param2"] (为ENTRYPOINT提供默认参数)
 CMD command param1 param2 ( shell 形式)
 ```
-
-
 
 ENTRYPOINT 的两种写法：
 
@@ -2071,19 +2028,18 @@ CMD ["2222"]
 ENTRYPOINT ["echo"]
 
 #构建出如上镜像后测试
-docker run xxxx：效果 echo 1111
+docker run xxxx：效果 echo 2222
 ```
 
 ### 2、只能有一个CMD
 
-- Dockerfile中只能有一条CMD指令。 如果您列出多个CMD，则只有最后一个CMD才会生效。
+- Dockerfile中只能有一个CMD和ENTRYPOINT 指令。 如果您列出多个，则只有最后一个才会生效。
 - CMD的主要目的是为执行中的容器提供默认值。 这些默认值可以包含可执行文件，也可以省略可执行文件，在这种情况下，您还必须指定ENTRYPOINT指令。
-- CMD 会被 docker run 之后的参数替换
-- CMD是在docker run 时运行。
-- RUN是在 docker build时运行。
-- 类似于 CMD 指令，但是ENTRYPOINT不会被docker run后面的命令覆盖，而且这些命令行参数会被当作参数送给 ENTRYPOINT 指令指定的程序
+- CMD会被 docker run 之后的参数替换。
+- CMD和ENTRYPOINT是在docker run 时运行，`只能取env参数`。
+- RUN是在 docker build时运行，`可以取arg和env参数`。
+- 类似于 CMD 指令，但是ENTRYPOINT不会被docker run后面的命令覆盖，而且这些命令行参数会被当作参数送给 ENTRYPOINT 指令指定的程序。
 - 在执行docker run的时候可以指定 ENTRYPOINT 运行所需的参数。
-- 如果 Dockerfile 中如果存在多个 ENTRYPOINT 指令，仅最后一个生效
 
 ### 3、CMD为ENTRYPOINT提供默认参数
 
@@ -2113,22 +2069,17 @@ CMD ["/etc/nginx/nginx.conf"] # 变参
 ENTRYPOINT ping baidu.com 怎么写都没用，容器启动都是以ENTRYPOINT的完整命令为准
 ```
 
-1
-
 |                           | 无 ENTRYPOINT                                                | ENTRYPOINT exec_entry p1_entry ENTRYPOINT ping baidu.com | ENTRYPOINT [“exec_entry”, “p1_entry”]          |
 | ------------------------- | ------------------------------------------------------------ | -------------------------------------------------------- | ---------------------------------------------- |
 | 无CMD                     | 错误 , 不允许的写法;容器没有启动命令                         | /bin/sh -c exec_entry p1_entry                           | exec_entry p1_entry                            |
 | CMD [“exec_cmd”,“p1_cmd”] | exec_cmd p1_cmd CMD ["ping","baidu.com"]                     | /bin/sh -c exec_entry p1_entry                           | exec_entry p1_entryexec_cmd p1_cmd             |
-| CMD[“p1_cmd”,“p2_cmd”]    | p1_cmd p2_cmd CMD [ "5","baidu.com" ]                        | /bin/sh -c exec_entry p1_entry                           | exec_entry p1_entryp1_cmd p2_cmd               |
+| CMD[“p1_cmd”,“p2_cmd”]    | p1_cmd p2_cmd CMD [ "5","baidu.com" ]                        | /bin/sh -c exec_entry p1_entry                           | exec_entry p1_entry p1_cmd p2_cmd              |
 | CMD exec_cmd p1_cmd       | /bin/sh -c exec_cmd p1_cmd CMD ["/bin/sh","-c","ping ${url}"] | /bin/sh -c exec_entry p1_entry                           | exec_entry p1_entry /bin/sh -c exec_cmd p1_cmd |
 |                           |                                                              |                                                          |                                                |
 
 ```sh
 FROM alpine
 ENV url=baidu.com
-# CMD ["ping","baidu.com"]
-# CMD ["useradd","-u","1000","-g","2000"]
-# CMD ["ping","${url}"]  取不出变量
 # CMD ping ${url}
 # 官方都是建议使用 []方式
 # CMD ["/bin/sh","-c","ping ${url}"]
@@ -2194,7 +2145,7 @@ ENTRYPOINT ping baidu.com
 - ARG指令定义了一个变量，用户可以在构建时使用--build-arg = 传递，docker build命令会将其传递给构建器。
 - --build-arg 指定参数会覆盖Dockerfile 中指定的同名参数
 - 如果用户指定了 未在Dockerfile中定义的构建参数 ，则构建会输出 警告 。
-- ARG只在构建期有效，运行期无效
+- ARG只在构建期有效，运行期无效，`所以CMD和ENTRYPOINT无法引用`。
 
 ```sh
 #docker build --no-cache --build-arg version=3.13.4 demo:test -f D2 .
@@ -2222,29 +2173,6 @@ CMD ["/bin/sh","-c","echo 1111;echo $param"]
 
 ### 2、ENV
 
-```sh
-FROM alpine
-LABEL maintainer = xueqimiao
-
-ARG param=222
-ARG msg="hello docker"
-
-# 构建期 + 运行期都生效 只能在运行期进行修改
-# 怎么修改
-# 构建期 不能改env的值
-# 运行期 docker run -e app=xue_docker2 demo:test
-ENV app=xue_docker
-
-RUN echo $param
-RUN echo $msg
-RUN echo $app
-
-# 运行时期我们会运行的指令（根据之前创建的镜像启动一个容器，容器启动默认运行的命令）
-#CMD echo 1111;echo $param
-# CMD ENTRYPOINT 都是指定的运行时的指令
-CMD ["/bin/sh","-c","echo 1111;echo $param;echo app_${app}"]
-```
-
 - 在构建阶段中所有后续指令的环境中使用，并且在许多情况下也可以内联替换。
 - 引号和反斜杠可用于在值中包含空格。
 - ENV 可以使用key value的写法，但是这种不建议使用了，后续版本可能会删除
@@ -2259,9 +2187,9 @@ ENV MY_NAME="John Doe" MY_DOG=Rex\ The\ Dog \
  MY_CAT=fluffy
 ```
 
-- docker run --env 可以修改这些值
+- `docker run -e 可以修改这些值`
 - 容器运行时ENV值可以生效
-- ENV在image阶段就会被解析并持久化（docker inspect image查看），参照下面示例
+- `ENV在image阶段就会被解析并持久化`（docker inspect image查看），参照下面示例
 
 ```dockerfile
 FROM alpine
@@ -2340,15 +2268,15 @@ COPY --chown=1 files* /somedir/
 COPY --chown=10:11 files* /somedir/
 ```
 
-### [#](https://blog.xueqimiao.com/docker/5a17fc/#_2、add)2、ADD
+### 2、ADD
 
-同COPY用法，不过 ADD拥有自动下载远程文件和解压的功能。
+同COPY用法，不过 ADD拥有**自动下载远程文件和解压**的功能。
 
 注意：
 
 - src 路径必须在构建的上下文中； 不能使用 ../something /something 这种方式，因为docker构建的第一步是将上下文目录（和子目录）发送到docker守护程序。
 - 如果 src 是URL，并且 dest 不以斜杠结尾，则从URL下载文件并将其复制到 dest 。
-- - 如果 dest 以斜杠结尾，将自动推断出url的名字（保留最后一部分），保存到 dest
+- 如果 dest 以斜杠结尾，将自动推断出url的名字（保留最后一部分），保存到 dest。
 - 如果 src 是目录，则将复制目录的整个内容，包括文件系统元数据。
 
 ```sh
@@ -2400,7 +2328,7 @@ RUN pwd
 #结果 /path/$DIRNAME
 ```
 
-```sh
+```
 FROM alpine
 RUN pwd && ls -l
 # 为以下所有的命令运行指定了基础目录
@@ -2417,15 +2345,6 @@ COPY *.txt   ./
 RUN  pwd && ls -l
 CMD ping baidu.com
 ```
-
-
-
-```sh
-FROM nginx
-WORKDIR /usr/share/nginx/html
-```
-
-
 
 ### 2、VOLUME
 
@@ -2459,8 +2378,7 @@ RUN echo 222 > /app/b.txt
 # 2）、VOLUME [ "/hello","/app" ] 容器以后自动挂载，在Dockerfile中对VOLUME的所有修改都不生效 要想生效 可以在声明挂载之前修改
 # 3）、挂载只有一点就是方便在外面修改，或者把外面的东西直接拿过来
 # 所以这个写在最后
-# JAVA 日志都要挂外面 /app/log
-# VOLUME ["/log"]
+# 挂载了两个卷，通过docker inspect xx|grep mounts  查看挂载的本机目录
 VOLUME ["/hello","/app"]
 # 这两句话没有生效
 RUN echo 6666 >> /hello/a.txt
@@ -2536,7 +2454,6 @@ RUN apt-get update && apt-get install vim -y
 
 ```dockerfile
 FROM centos
-MAINTAINER xue<xueqimiao@163.com> 
   
 ENV MYPATH /usr/local 
 WORKDIR $MYPATH 
@@ -2633,8 +2550,8 @@ COPY --from=builder /app/target/*.jar /app.jar
 ENV JAVA_OPTS=""
 ENV PARAMS=""
 # 运行jar包
-ENTRYPOINT [ "sh", "-c", "java -Djava.security.egd=file:/dev/./urandom $JAVA_OPTS
--jar /app.jar $PARAMS" ]
+ENTRYPOINT ["sh", "-c", "java -Djava.security.egd=file:/dev/./urandom $JAVA_OPTS
+-jar /app.jar $PARAMS"]
 <!--为了加速下载需要在pom文件中复制如下 -->
   <repositories>
     <repository>
@@ -2698,10 +2615,6 @@ subversion \
   *.iml
   target/*
   ```
-
-  1
-  2
-  3
 
 - 使用多阶段构建
 
