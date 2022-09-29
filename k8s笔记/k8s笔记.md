@@ -2454,9 +2454,41 @@ kubectl run -i --tty load-generator --image=busybox /bin/sh
 
 https://kubernetes.io/zh/docs/concepts/workloads/controllers/deployment/#deployment-statu
 
-## 三、RC、RS
+## RC、RS
+
+https://kubernetes.io/zh/docs/concepts/workloads/controllers/replicaset/
+
+RC： ReplicasController：副本控制器
+
+RS：ReplicasSet：副本集；Deployment【滚动更新特性】默认控制的是他
+
+RC是老版，**RS是新版**（可以有复杂的选择器【表达式】）。
+
+```yaml
+kubectl explain rs.spec.selector
+## RS支持复杂选择器
+matchExpressions:
+  - key: pod-name
+    value: [aaaa,bbb]
+    # In, NotIn, Exists and DoesNotExist
+    # In： value: [aaaa,bbb]必须存在，表示key指定的标签的值是这个集合内的
+    # NotIn value: [aaaa,bbb]必须存在，表示key指定的标签的值不是这个集合内的
+    # Exists # 只要有key指定的标签即可，不用管值是多少
+    # DoesNotExist # 只要Pod上没有key指定的标签，不用管值是多少
+    operator: DoesNotExist
+```
+
+> 虽然ReplicasSet强大，但是我们**也不直接写RS**；都是直接写Deployment的，Deployment会自动产生RS。
+>
+> Deployment每次的滚动更新都会产生新的RS。
 
 ## DaemonSet
+
+https://kubernetes.io/zh/docs/concepts/workloads/controllers/daemonset/
+
+**k8s集群的每个机器(每一个节点)都运行一个程序（默认master除外，master节点默认不会把Pod调度过去）**
+
+**无需指定副本数量**；因为默认给每个机器都部署一个（master除外）
 
 DaemonSet 控制器确保所有（或一部分）的节点都运行了一个指定的 Pod 副本。
 
@@ -2502,13 +2534,17 @@ spec:
 kubectl get pod -l name=logging -o wide
 ```
 
-
-
-
-
-
-
 ## StatefulSet
+
+https://kubernetes.io/zh/docs/concepts/workloads/controllers/statefulset/
+
+> Deployment部署的应用我们一般称为**无状态**应用
+>
+> StatefulSet部署的应用我们一般称为**有状态**应用
+>
+> 无状态应用：网络可能会变，存储可能会变，顺序可能会变。场景就是业务代码（Deployment）
+>
+> 有状态应用：网络不变，存储不变，顺序不变。场景就是中间件（MySQL、Redis、MQ）
 
 有状态副本集；Deployment等属于无状态的应用部署（stateless）
 
@@ -2592,7 +2628,188 @@ ping stateful-tomcat-0.stateful-tomcat
 
 
 
+![image-20220929110315046](images/image-20220929110315046.png)
 
+DNS解析。整个状态kubelet（DNS内容同步到Pod）和kube-proxy（整个集群网络负责）会同步
+
+> curl nginx-svc： 负载均衡到sts部署的Pod上
+>
+> curl mysql-0.nginx-svc： 直接访问指定Pod
+
+### 1、和Deployment不同的字段
+
+#### 1、podManagementPolicy： pod管理策略
+
+podManagementPolicy : 控制Pod创建、升级以及扩缩容逻辑
+
+podManagementPolicy controls how pods are created during initial scale up, when replacing pods on nodes, or when scaling down. The default policy is `OrderedReady`, where pods are created in increasing order (pod-0, then pod-1, etc) and the controller will wait until each pod is ready before continuing. When scaling down, the pods are removed in the opposite order. The alternative policy is `Parallel`which will create pods in parallel to match the desired scale without waiting, and on scale down will delete all pods at once.
+
+默认是 `OrderedReady` : 有序启动
+
+修改为 `Parallel` ： 同时创建启动，一般不用
+
+#### 2、updateStrategy： 更新策略
+
+updateStrategy
+
+updateStrategy indicates the StatefulSetUpdateStrategy that will be employed to update Pods in the StatefulSet when a revision is made to Template.
+
+- rollingUpdate
+  - RollingUpdate is used to communicate parameters when Type is RollingUpdateStatefulSetStrategyType.
+  - partition ：按分区升级
+- type
+  - Type indicates the type of the StatefulSetUpdateStrategy. Default is RollingUpdate.
+
+实验：
+
+**先部署一个sts**
+
+```yaml
+apiVersion: apps/v1
+kind: StatefulSet  ### 有状态副本集
+metadata:
+  name: stateful-nginx
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: ss-nginx # has to match .spec.template.metadata.labels
+  serviceName: "nginx"  ## 服务名，指定加到那个service里面
+  replicas: 3 # 三个副本
+  template: ## Pod模板
+    metadata:
+      labels:
+        app: ss-nginx # has to match .spec.selector.matchLabels
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+```
+
+
+
+**在进行分区升级**
+
+```yaml
+apiVersion: apps/v1
+kind: StatefulSet  ### 有状态副本集
+metadata:
+  name: stateful-nginx
+  namespace: default
+spec:
+  podManagementPolicy: OrderedReady ## 所有pod一起创建，OrderedReady：有序创建
+  updateStrategy: ## 升级策略
+    rollingUpdate:
+      partition: 1 ## 更新大于等于这个索引的pod
+  selector:
+    matchLabels:
+      app: ss-nginx # has to match .spec.template.metadata.labels
+  serviceName: "nginx"  ## 服务名，指定加到那个service里面
+  replicas: 3 # 三个副本
+  template: ## Pod模板
+    metadata:
+      labels:
+        app: ss-nginx # has to match .spec.selector.matchLabels
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.20.1 ## 默认第三个（最后一个）开始有序升级
+```
+
+### 2、部署有状态的mysql
+
+```yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql-cluster
+  namespace: default
+spec:
+  serviceName: mysql  # 一定指定StatefulSet的serviceName
+  selector:
+    matchLabels:
+      app: mysql 
+  replicas: 2 # by default is 1 。默认也是负载均衡
+  ### 自己连进这两个mysql。才能主从同步
+  template:
+    metadata:
+      labels:
+        app: mysql # has to match .spec.selector.matchLabels
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: mysql
+        image: mysql:8.0.25
+        securityContext:  ## 指定安全上下文
+          runAsUser: 1000
+          runAsGroup: 1000
+        ports:
+        - containerPort: 3306
+          name: mysql-port
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: "123456"
+        - name: MYSQL_DATABASE
+          value: "db_test"
+        volumeMounts:
+        - name: mysql-cnf
+          mountPath: /etc/mysql/conf.d
+        - name: mysql-data
+          mountPath: /var/lib/mysql
+  volumeClaimTemplates:
+  - metadata:
+      name: mysql-cnf
+    spec:
+      storageClassName: "managed-nfs-storage"
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+  - metadata:
+      name: mysql-data
+    spec:
+      storageClassName: "managed-nfs-storage"
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: default
+spec:
+  selector:
+    app: mysql
+  type: NodePort 
+  # type: ClusterIP
+  # clusterIP: None  ## 没有集群ip，只能通过内部的dns访问 mysql-cluster-0.mysql.default
+  ports:
+  - name: mysql-port
+    port: 3306 ## service端口
+    targetPort:  3306 ## pod端口
+    protocol: TCP
+
+
+# ---
+# apiVersion: v1
+# kind: PersistentVolumeClaim
+# metadata:
+#   name: hahah
+#   namespace: default
+#   labels:
+#     app: hahah
+# spec:
+#   storageClassName: "managed-nfs-storage"
+#   accessModes:
+#   - ReadWriteOnce
+#   resources:
+#     requests:
+#       storage: 1Gi
+```
 
 ## Job、CronJob
 
@@ -2725,10 +2942,6 @@ spec:
             - date; echo Hello from the Kubernetes cluster
           restartPolicy: OnFailure
 ```
-
-
-
-
 
 ## GC
 
