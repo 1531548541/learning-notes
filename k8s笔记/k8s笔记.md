@@ -1992,10 +1992,6 @@ start完成以后，liveness和readness并存。   liveness失败导致重启。
 
 
 
-
-
-
-
 ## Deployment
 
 ### 什么是Deployment
@@ -2009,7 +2005,7 @@ start完成以后，liveness和readness并存。   liveness失败导致重启。
 ### Deployment创建
 
 - 基本格式
-  - `.metadata.name`指定deploy名字
+  - `metadata.name`指定deploy名字
   - `replicas` 指定副本数量
   - `selector` 指定匹配的Pod模板。
   - `template` 声明一个Pod模板
@@ -2017,8 +2013,6 @@ start完成以后，liveness和readness并存。   liveness失败导致重启。
 > 编写一个Deployment的yaml
 >
 > 赋予Pod自愈和故障转移能力。
-
-
 
 - 在检查集群中的 Deployment 时，所显示的字段有：
   - `NAME` 列出了集群中 Deployment 的名称。
@@ -2049,13 +2043,11 @@ start完成以后，liveness和readness并存。   liveness失败导致重启。
 >
 >    ---   rs1： 4       abc    
 >
->    ---    rs2:  4        def
+>    ---   rs2:    4       def
 >
->    ---    rsN:  4     eee
+>    ---   rsN:    4      eee
 >
 >  nginx=111   nginx:v1=2222  nginx:v2=3333
-
-
 
 ### Deployment 更新机制
 
@@ -2389,8 +2381,6 @@ kubectl run -i --tty load-generator --image=busybox /bin/sh
 
 
 
-
-
 ### *Canary（金丝雀部署）*
 
 #### 蓝绿部署VS金丝雀部署
@@ -2403,17 +2393,11 @@ kubectl run -i --tty load-generator --image=busybox /bin/sh
 
 
 
-
-
 > 金丝雀部署
 >
 > 矿场。
 
 ![img]( images/a6324354-canary-1619679814751.gif)
-
-
-
-
 
 #### 2、金丝雀的简单测试
 
@@ -2443,12 +2427,6 @@ kubectl run -i --tty load-generator --image=busybox /bin/sh
 
 - registry.cn-hangzhou.aliyuncs.com/lfy_k8s_ images/nginx-test:env-msg   默认输出11111
 - nginx： 默认输出  默认页；
-
-
-
-
-
-
 
 ### Deployment状态与排错
 
@@ -6942,3 +6920,21 @@ Other Commands:  #其他
 
 - [ ] 为什么pod钩子函数，exec执行命令，logs中无显示？http正常访问。
 
+## kubectl炸了
+
+问题
+
+~~~sh
+root@node01:~# kubectl get node
+The connection to the server 192.168.10.10:6443 was refused - did you specify the right host or port?
+~~~
+
+> 解决思路：
+>
+> 1.去docker中查看apiServer、etcd是不是挂了，查看其log。
+>
+> 2.最终发现etcd报错：snap: snapshot file doesn't exist。
+>
+> 3.这时将备份的文件放到/var/lib/etcd，如果没有备份那就删掉/var/lib/etcd/*，`此时以前的数据就无了`。
+>
+> 4.重启kubelet，等一会儿（`下次记得备份/var/lib/etcd/*`）
