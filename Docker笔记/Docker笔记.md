@@ -1053,8 +1053,7 @@ redis-cli --cluster check 139.198.28.196:6381
 ```sh
 #准备文件和文件夹，并chmod -R 777 xxx
 #配置文件内容，参照
-https://www.elastic.co/guide/en/elasticsearch/reference/7.5/node.name.html 搜索相
-关配置
+https://www.elastic.co/guide/en/elasticsearch/reference/7.5/node.name.html 搜索相关配置
 # 考虑为什么挂载使用esconfig ...
 docker run --name=elasticsearch -p 9200:9200 -p 9300:9300 \
 -e "discovery.type=single-node" \
@@ -1067,10 +1066,9 @@ docker run --name=elasticsearch -p 9200:9200 -p 9300:9300 \
 #######################################
 
 docker pull elasticsearch:7.4.2  存储和检索数据
-docker pull kibana:7.4.2 可视化检索数据    
+docker pull kibana:7.4.2 可视化检索数据   
 
-mkdir -p /opt/docker/elasticsearch/config # 用来存放配置文件
-mkdir -p /opt/docker/elasticsearch/data  # 数据
+mkdir -p /opt/docker/elasticsearch/{config,data,plugins} # 用来存放配置文件、数据、插件
 echo "http.host: 0.0.0.0" >/opt/docker/elasticsearch/config/elasticsearch.yml # 允许任何机器访问
 chmod -R 777 /opt/docker/elasticsearch/ ## 设置elasticsearch文件可读写权限
 
@@ -1092,9 +1090,7 @@ docker run --name elasticsearch -p 9200:9200 -p 9300:9300 \
 docker update elasticsearch --restart=always
 
 # 启动kibana
-docker run --name kibana -e ELASTICSEARCH_HOSTS=http://42.192.52.168:9200 -p 5601:5601 -d kibana:7.4.2
-
-http://42.192.52.168:9200 改成自己Elasticsearch上的地址
+docker run --name kibana -e ELASTICSEARCH_HOSTS=http://192.168.200.128:9200 -p 5601:5601 -d kibana:7.4.2
 ```
 
 ## 5、安装Tomcat

@@ -1,4 +1,52 @@
-## ES实现原理
+# 安装
+
+~~~sh
+#准备文件和文件夹，并chmod -R 777 xxx
+#配置文件内容，参照
+https://www.elastic.co/guide/en/elasticsearch/reference/7.5/node.name.html 搜索相关配置
+# 考虑为什么挂载使用esconfig ...
+docker run --name=elasticsearch -p 9200:9200 -p 9300:9300 \
+-e "discovery.type=single-node" \
+-e ES_JAVA_OPTS="-Xms300m -Xmx300m" \
+-v /app/es/data:/usr/share/elasticsearch/data \
+-v /app/es/plugins:/usr/shrae/elasticsearch/plugins \
+-v esconfig:/usr/share/elasticsearch/config \
+-d elasticsearch:7.12.0
+
+#######################################
+
+docker pull elasticsearch:7.4.2  存储和检索数据
+docker pull kibana:7.4.2 可视化检索数据   
+
+mkdir -p /opt/docker/elasticsearch/{config,data,plugins} # 用来存放配置文件、数据、插件
+echo "http.host: 0.0.0.0" >/opt/docker/elasticsearch/config/elasticsearch.yml # 允许任何机器访问
+chmod -R 777 /opt/docker/elasticsearch/ ## 设置elasticsearch文件可读写权限
+
+# 启动es
+docker run --name elasticsearch -p 9200:9200 -p 9300:9300 \
+-e  "discovery.type=single-node" \
+-e ES_JAVA_OPTS="-Xms64m -Xmx512m" \
+-v /opt/docker/elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml \
+-v /opt/docker/elasticsearch/data:/usr/share/elasticsearch/data \
+-v  /opt/docker/elasticsearch/plugins:/usr/share/elasticsearch/plugins \
+-d elasticsearch:7.4.2
+
+#以后再外面装好插件重启就可
+
+#特别注意：
+-e ES_JAVA_OPTS="-Xms64m -Xmx128m" \ 测试环境下，设置 ES 的初始内存和最大内存，否则导致过大启动不了ES
+
+# 开机启动
+docker update elasticsearch --restart=always
+
+# 启动kibana
+docker run --name kibana -e ELASTICSEARCH_HOSTS=http://192.168.200.128:9200 -p 5601:5601 -d kibana:7.4.2
+
+~~~
+
+
+
+# ES实现原理
 
 ![image-20220809103314866](C:\Users\Administrator\Desktop\learning-notes\ES笔记\images\image-20220809103314866.png)
 
@@ -6,7 +54,7 @@
 >
 >Lucene使用了field概念，用于表达信息所在位置（如标题中、文章中、URL中），在建索引时，该field信息也记录在词典文件中，每个关键词都有一个field信息，因为每个关键字一定属于一个或多个field。
 
-## ES一些术语和概念
+# ES一些术语和概念
 
 1. 索引词（term）
 
@@ -83,7 +131,7 @@
 
     > ID是一个文件的唯一标识，如果在存库时没有提供ID，系统会自动生存ID，文档的index/type/id必须是唯一的。
 
-## API
+# API
 
 ### CRUD
 
