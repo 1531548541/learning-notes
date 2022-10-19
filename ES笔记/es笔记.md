@@ -131,9 +131,21 @@ docker run --name kibana -e ELASTICSEARCH_HOSTS=http://192.168.200.128:9200 -p 5
 
     > ID是一个文件的唯一标识，如果在存库时没有提供ID，系统会自动生存ID，文档的index/type/id必须是唯一的。
 
+**返回值字段说明**
+
+![img](images/es-usage-3.png)
+
+- `took` – Elasticsearch运行查询所花费的时间（以毫秒为单位）
+- `timed_out` –搜索请求是否超时
+- `_shards` - 搜索了多少个碎片，以及成功，失败或跳过了多少个碎片的细目分类。
+- `max_score` – 找到的最相关文档的分数
+- `hits.total.value` - 找到了多少个匹配的文档
+- `hits.sort` - 文档的排序位置（不按相关性得分排序时）
+- `hits._score` - 文档的相关性得分（使用match_all时不适用）
+
 # API
 
-### CRUD
+## CRUD
 
 > **注意：新版ES已经废除了type**，所以以前的/index/type/id推荐变为 /index/_doc/id
 >
@@ -434,8 +446,10 @@ POST _aliases
 
 #### 索引模板TODO ES实战P66
 
-### DSL
+## DSL
 
-### 路由TODO
+
+
+## 路由TODO
 
 >
