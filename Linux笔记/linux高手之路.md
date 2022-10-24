@@ -57,8 +57,17 @@ firewall-cmd --reload
 systemctl stop firewalld.service
 
 #查看端口
-netstat -nlpt
+netstat -nlptu
 ~~~
+
+# 文件
+
+~~~sh
+#查看某个目录下所有文件的大小
+du -h
+~~~
+
+
 
 # vi
 

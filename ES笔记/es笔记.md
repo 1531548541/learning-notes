@@ -1,3 +1,22 @@
+# 常用命令
+
+~~~sh
+#查看集群状态
+GET /_cluster/health?pretty&human
+#查看集群节点情况
+GET /_cat/nodes?pretty
+#查看集群负载情况
+GET /_cat/nodes?v
+#集群任务处理情况
+GET /_cat/thread_pool?v
+#查看索引
+GET /_cat/indices?v
+#查看索引模板
+GET /_cat/templates
+~~~
+
+
+
 # 安装
 
 ~~~sh
