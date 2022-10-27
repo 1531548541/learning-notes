@@ -129,3 +129,12 @@ sync
 echo 3 > /proc/sys/vm/drop_caches
 ~~~
 
+scp
+
+~~~sh
+#将本机/root/lk目录下所有的文件传输到服务器43.224.34.73的/home/lk/cpfile目录下
+scp -r /root/lk root@43.224.34.73:/home/lk/cpfile
+#将服务器43.224.34.73上/home/lk/目录下所有的文件全部复制到本地的/root目录下
+scp -r root@43.224.34.73:/home/lk /root
+~~~
+

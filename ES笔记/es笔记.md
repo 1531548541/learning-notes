@@ -162,9 +162,9 @@ docker run --name kibana -e ELASTICSEARCH_HOSTS=http://192.168.200.128:9200 -p 5
 - `hits.sort` - 文档的排序位置（不按相关性得分排序时）
 - `hits._score` - 文档的相关性得分（使用match_all时不适用）
 
-# API
 
-## CRUD
+
+# 索引
 
 > **注意：新版ES已经废除了type**，所以以前的/index/type/id推荐变为 /index/_doc/id
 >
@@ -179,7 +179,7 @@ docker run --name kibana -e ELASTICSEARCH_HOSTS=http://192.168.200.128:9200 -p 5
 |   GET（查询）    |     localhost:9200/索引名称/_doc/文档id      |   查询文档通过文档ID   |
 |   POST（查询）   | localhost:9200/索引名称/__doc/文档id/_search |      查询所有数据      |
 
-#### 创建空索引
+## 创建空索引
 
 > 说明：**可以直接创建索引**，不需要创建空索引后再修改数据
 
@@ -196,17 +196,18 @@ PUT /myindex
 #不指定分片数和副本数，系统默认1个分片，1个副本
 ```
 
-#### 修改索引
+## 修改索引
 
 ~~~json
+#可以修改索引副本数，分词器等
 PUT /wujie/_settings
 {
   "number_of_replicas": 2
 }
-#注意：无法修改分片数量，否则报错
+#注意：【无法修改分片数量，否则报错】
 ~~~
 
-#### 打开/关闭索引
+## 打开/关闭索引
 
 ~~~json
 POST /wujie/_close
@@ -221,7 +222,7 @@ Get /_cat/indices?v
 
 
 
-#### 创建映射
+## 创建映射
 
 ~~~json
 #为index创建mappings
@@ -262,7 +263,7 @@ PUT /zfc/_doc/1
 }
 ~~~
 
-#### 修改映射
+## 修改映射（重建索引）
 
 >**index的mappings无法修改**，可以通过**_reindex** 重建索引,方式修改
 
@@ -338,64 +339,15 @@ POST _aliases
 }
 ~~~
 
-![image-20220809173456326](C:\Users\Administrator\Desktop\learning-notes\ES笔记\images\image-20220809173456326.png)
+> dest.version_type:
+>
+> - interval：导致es盲目转储文件到目标索引，任何具有相同类型和ID的文档将会被重写。
+> - external：会导致es保护源索引，如果在目标索引中有一个比源索引旧的版本，则会更新文档。对于源文件中丢失的文档也会在目标中被创建。
+> - create：会导致目标索引中仅创建丢失的文件，所有现有的文件将导致版本冲突。
+>
+> 正常情况下发生冲突时，_reindex过程将会被终止，可以在请求中设置 conflicts:proceed，可以只进行计算。
 
-#### 插入数据
-
-~~~json
-PUT /wujie/_doc/1
-{
-  "id":2,
-  "name":"zhangsan"
-}
-
-或
-
-POST /wujie/_doc/1
-{
-  "id":2,
-  "name":"zhangsan"
-}
-~~~
-
-#### 查看数据
-
-~~~json
-#根据doc的id搜索index下的某个doc
-GET /wujie/_doc/1
-#搜索index下所有的doc（默认最多10条）
-GET /wujie/_search
-#查询年龄等于20的用户
-GET /wujie/_search?q=age:20
-~~~
-
-#### 删除数据
-
-~~~json
-DELETE /wujie
-~~~
-
-#### 修改数据
-
-~~~json
-POST /wujie/_update/1
-{
-  "doc":{
-    "id":1,
-    "age":21
-  }
-}
-
-或
-
-PUT /wujie/_doc/1
-{
-  "id":1,
-  "name":"lisi"
-}
-~~~
-
-#### 索引别名
+## 索引别名
 
 ~~~json
 #创建别名
@@ -463,12 +415,117 @@ POST _aliases
 }
 ~~~
 
-#### 索引模板TODO ES实战P66
+## 语句分析
 
-## DSL
+~~~json
+GET /_analyze
+{
+  "analyzer": "standard", 
+  "text": ["zfc is a db"]
+}
+~~~
 
 
 
-## 路由TODO
+## 索引模板
+
+### 创建索引模板
+
+~~~json
+PUT /_template/mytemplate
+{
+  "index_patterns":"my-*",
+  "settings": {
+    "number_of_shards": 1
+  },
+  "mappings": {
+    "_source": {
+      "enabled": false
+    }
+  }
+  
+}
+~~~
+
+### 删除索引模板
+
+~~~json
+DELETE /_template/mytemplate
+~~~
+
+### 查看索引模板
+
+~~~json
+GET /_template/mytemplate
+~~~
+
+> 当匹配到多个模板时，会合并模板，重复的地方根据order的优先级（小的先）
+
+
+
+# 文档
+
+## 新增数据
+
+~~~json
+PUT /wujie/_doc/1
+{
+  "id":2,
+  "name":"zhangsan"
+}
+
+或
+
+POST /wujie/_doc/1
+{
+  "id":2,
+  "name":"zhangsan"
+}
+~~~
+
+## 查看数据
+
+~~~json
+#根据doc的id搜索index下的某个doc
+GET /wujie/_doc/1
+#搜索index下所有的doc（默认最多10条）
+GET /wujie/_search
+#查询年龄等于20的用户
+GET /wujie/_search?q=age:20
+~~~
+
+## 删除数据
+
+~~~json
+DELETE /wujie
+~~~
+
+## 修改数据
+
+~~~json
+POST /wujie/_update/1
+{
+  "doc":{
+    "id":1,
+    "age":21
+  }
+}
+
+或
+
+PUT /wujie/_doc/1
+{
+  "id":1,
+  "name":"lisi"
+}
+~~~
+
+
+
+# DSL
+
+
+
+# 路由TODO
 
 >
