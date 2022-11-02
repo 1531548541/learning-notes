@@ -102,7 +102,7 @@ rpm -Uvh xx.rpm
 rpm -qa|grep xx
 ~~~
 
-# unzip
+# zip
 
 ~~~sh
 #把/home目录下面的data目录压缩为data.zip
