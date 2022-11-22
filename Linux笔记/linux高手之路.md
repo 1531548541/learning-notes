@@ -138,3 +138,13 @@ scp -r /root/lk root@43.224.34.73:/home/lk/cpfile
 scp -r root@43.224.34.73:/home/lk /root
 ~~~
 
+# pg
+
+~~~sh
+# 备份sql（结构+数据），数据加上 -a ,结构加上-s , 什么都不加就是结构+数据
+1. cd到pg的bin
+2. pg_dump -h localhost -U postgres databasename > databasename.bak
+# 恢复sql
+3. psql -h localhost -U postgres -d databasename < databasename.bak
+~~~
+
