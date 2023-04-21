@@ -1181,6 +1181,22 @@ docker pull rabbitmq:3.9.15-management
 docker run -d --name=rabbitmq -p 15672:15672 -p 5672:5672 rabbitmq:3.9.15-management
 ```
 
+## 10、kafka
+
+~~~sh
+#安装zk
+docker pull wurstmeister/zookeeper
+
+docker run -d --restart=always --log-driver json-file --log-opt max-size=100m --log-opt max-file=2  --name zookeeper -p 2181:2181 -v /etc/localtime:/etc/localtime wurstmeister/zookeeper
+#安装kafka
+docker pull wurstmeister/kafka
+
+docker run -d  --log-driver json-file --log-opt max-size=100m --log-opt max-file=2 --name kafka -p 9092:9092 -e KAFKA_BROKER_ID=0 -e KAFKA_ZOOKEEPER_CONNECT=106.12.132.121:2181/kafka -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://106.12.132.121:9092 -e KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092 -v /etc/localtime:/etc/localtime wurstmeister/kafka
+
+~~~
+
+
+
 # 网络和存储原理
 
 问题：

@@ -861,6 +861,8 @@ kafka-console-producer.sh --bootstrap-server node01:9092 --topic first
 kafka-console-consumer.sh --bootstrap-server node01:9092 --topic first
 #查看分区、副本、isr信息
 kafka-topics.sh --bootstrap-server node01:9092 --describe --topic wujie
+#查看所有分区
+kafka-topics.sh --zookeeper node01:2181 --list
 #查看某个消费者组的消费情况
 kafka-consumer-groups.sh --bootstrap-server node01:9092 --describe --group wujiea
 #修改offset
