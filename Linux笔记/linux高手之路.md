@@ -251,6 +251,15 @@ scp -r /root/lk root@43.224.34.73:/home/lk/cpfile
 scp -r root@43.224.34.73:/home/lk /root
 ~~~
 
+目录/文件相关
+
+~~~sh
+#查看某个目录下文件数
+ls | wc -l
+~~~
+
+
+
 # pg
 
 ~~~sh
@@ -268,5 +277,20 @@ scp -r root@43.224.34.73:/home/lk /root
 journalctl -e -u 服务名
 #查看系统日志
 cat /var/log/message
+~~~
+
+# 查看磁盘
+
+~~~sh
+#查看磁盘使用
+df -h
+#查看某个目录磁盘
+~~~
+
+# 查看端口
+
+~~~sh
+查看端口是否使用
+netstat -tlnp|grep xx
 ~~~
 
