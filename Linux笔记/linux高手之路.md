@@ -263,6 +263,8 @@ ls | wc -l
 # pg
 
 ~~~sh
+#进去cmd
+psql -U postgres -h localhost -p 5432 -d dbname
 # 备份sql（结构+数据），数据加上 -a ,结构加上-s , 什么都不加就是结构+数据
 1. cd到pg的bin
 2. pg_dump -h localhost -U postgres databasename > databasename.bak
