@@ -763,6 +763,26 @@ daemonize no
 开启redis数据持久化  appendonly yes  可选 
 ```
 
+~~~sh
+#为已有的redis设置密码
+#1.进入redis的容器
+docker exec -it 容器ID bash
+
+#2.进入redis目录
+cd /usr/local/bin
+
+#3.运行命令：
+redis-cli
+
+#4.查看现有的redis密码：
+config get requirepass
+
+#5.设置redis密码
+config set requirepass 密码
+~~~
+
+
+
 ### 2、集群安装
 
 ```sh
