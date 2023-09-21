@@ -487,3 +487,78 @@ res := func(num int) int {
 fmt.Println("res:%d", res)
 ~~~
 
+## 闭包
+
+> 闭包就是⼀个函数和与其相关的引⽤环境组合的⼀个整体
+>
+> 举例：求sum，第一个函数调用用到上一个调用结果的sum
+
+~~~go
+package main
+
+import "fmt"
+
+func getSum() func(int) int {
+	sum := 0
+	return func(num int) int {
+		sum += num
+		return sum
+	}
+}
+
+func main() {
+	f := getSum()
+	fmt.Println(f(1))
+	fmt.Println(f(2))
+	fmt.Println(f(3))
+}
+//匿名函数中引⽤的那个变量会⼀直保存在内存中，可以⼀直使⽤
+1
+3
+6
+~~~
+
+## defer
+
+> 作用：在函数执⾏完毕后，及时的释放资源，最后才会执行
+>
+> **原理：将代码语句放入特定的栈中，同时拷贝变量入栈**
+>
+> 注意：
+>
+> **1.多个defer语句是先进先出的顺序**
+>
+> **2.引用的变量值还是原时间点**
+
+~~~go
+func main() {
+	num := 1
+	defer fmt.Println("defer中的num:", num)
+	num++
+	fmt.Println("num:", num)
+}
+//结果
+num: 2         
+defer中的老二  
+defer中的num: 1
+~~~
+
+## str常用方法
+
+strings、strconv自行探索
+
+## 内置函数
+
+### len
+
+### new
+
+> 分配内存，主要⽤来分配值类型（int系列, float系列, bool,string、数组和结构体struct）
+
+![image-20230919103855167](images/image-20230919103855167.png)
+
+![image-20230919103918886](images/image-20230919103918886.png)
+
+### make
+
+> 分配内存，主要⽤来分配引⽤类型（指针、slice切⽚、map、管道chan、interface 等）
