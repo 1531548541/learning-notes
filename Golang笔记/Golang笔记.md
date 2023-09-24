@@ -551,14 +551,355 @@ strings、strconv自行探索
 
 ### len
 
-### new
+~~~go
+func len(v Type) int
+~~~
 
-> 分配内存，主要⽤来分配值类型（int系列, float系列, bool,string、数组和结构体struct）
+内置函数len返回v的长度，取决于具体类型：
 
-![image-20230919103855167](images/image-20230919103855167.png)
+> 数组：v中元素数量
+>
+> 数组指针：*v中元素数量（v为nil时panic）
+>
+> 切片、映射：v中元素的数量，若v为nil，len(v)=0
+>
+> **字符串：v中字节长度，若想计算字符串长度要用utf8中的函数**
+>
+> 通道：通道缓存中队列（未读取）元素的数量；若v为nil，len(v)=0
 
-![image-20230919103918886](images/image-20230919103918886.png)
+~~~go
+func new(Type) *Type
+//内置函数new分配内存。其第一个实参为类型，而非值。返回值为指向该类型的新分配的零值的指针。
+~~~
+
+> 分配内存，主要⽤来分配**值类型**（int系列, float系列, bool,string、数组和结构体struct）
+
+![image-20230924172913068](images/image-20230924172913068.png)
+
+![image-20230924173133133](images/image-20230924173133133.png)
 
 ### make
 
-> 分配内存，主要⽤来分配引⽤类型（指针、slice切⽚、map、管道chan、interface 等）
+~~~go
+func make(t Type, size ...IntegerType) Type
+~~~
+
+> 作用：分配内存，主要⽤来分配**引⽤类型**（指针、slice切⽚、map、管道chan、interface 等）。其第一个实参为类型，而非值。make返回类型与其参数相同，而非指向它的指针，其具体的结构取决于具体的类型：
+>
+> 切片：size指定了其长度。该切片的容量等于长度。切片支持第二个整数实参可用来指定不同的容量；它必须不小于其长度，因此make(int[], 0 ,10)会分配一个长度0，容量10的切片。
+>
+> 映射：初始分配的创建取决于size，但产生的映射长度为0。size可以省略，这种情况下就会分配一个小的起始大下。
+>
+> 通道：通道的缓存根据指定的缓存容量初始化。若size为0或被省略，该通道即为无缓存的。
+
+## 异常
+
+### defer+recover机制处理错误
+
+> defer作用是将程序块放入栈中，最后处理
+>
+> recover作用是捕获异常
+
+~~~go
+package main
+
+import "fmt"
+
+func main() {
+	defer func() {
+		err := recover()
+		if err != nil {
+			fmt.Println("出现错误!!!!!!:", err)
+		}
+	}()
+	num1 := 10
+	num2 := 0
+	fmt.Println(num1 / num2)
+}
+~~~
+
+### 自定义异常
+
+```go
+func New(text string) error {
+   return &errorString{text}
+}
+```
+
+~~~go
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
+func main() {
+	defer func() {
+		err := recover()
+		if err != nil {
+			fmt.Println("recover捕获到异常!!!!!!:", err)
+		}
+	}()
+	num1 := 10
+	num2 := 0
+	res, err := divide(num1, num2)
+	if err != nil {
+		fmt.Println("程序出现错误!!!!!!!!!:", err)
+	} else {
+		fmt.Println("运行结果:", res)
+	}
+}
+
+func divide(num1 int, num2 int) (int, error) {
+	if num2 == 0 {
+		err := errors.New("被除数不是为0")
+		panic(err)   //！！！！！！此处会终止程序运行！！！！！！
+		return -1, err
+	}
+	return num1 / num2, nil
+}
+~~~
+
+> panic(err)会终止程序运行
+>
+> 因此上述代码中会被recover捕获，而不会执行divide函数下面的代码
+
+## 数组
+
+### 定义
+
+~~~go
+package main
+
+import "fmt"
+
+func main() {
+	var arr [3]int
+	arr[0] = 1
+	arr[1] = 1
+	arr[2] = 1
+	fmt.Printf("arr长度:%d,类型:%T,地址%p,值:%v \n", len(arr), arr, &arr, arr)
+	fmt.Printf("arr[0]地址:%p \n", &arr[0])
+	fmt.Printf("arr[1]地址:%p \n", &arr[1])
+	fmt.Printf("arr[2]地址:%p", &arr[2])
+}
+//arr长度:3,类型:[3]int,地址0xc0000100d8,值:[1 1 1]
+//arr[0]地址:0xc0000100d8
+//arr[1]地址:0xc0000100e0
+//arr[2]地址:0xc0000100e8
+
+~~~
+
+![image-20230924183830904](images/image-20230924183830904.png)
+
+### 几种初始化方式
+
+~~~go
+//初始化几种方式
+	//方式1
+	var arr1 = [3]int{1, 2, 3}
+	fmt.Println(arr1)
+	//方式2
+	var arr2 = [...]int{1, 2, 3}
+	fmt.Println(arr2)
+	//方式3
+	var arr3 = [...]int{0: 1, 2: 2, 1: 3}
+	fmt.Println(arr3)  //[1 3 2] 
+~~~
+
+### 注意点
+
+> 注意：长度也是类的一部分
+>
+> ![image-20230924184356045](images/image-20230924184356045.png)
+
+![image-20230924193318191](images/image-20230924193318191.png)
+
+![image-20230924193325577](images/image-20230924193325577.png)
+
+## 切片
+
+### 定义
+
+> 跟数组类似，但不固定长度，可自动扩容（类似java里的ArrayList，但没有remove等方法，需要自己实现）
+>
+> 遍历方式跟数组一致：1.for            2.range
+
+~~~go
+package main
+
+import "fmt"
+
+func main() {
+	//切片定义：
+	arr := [3]int{1, 2, 3}
+	//方式一：切割数组
+	slice := arr[:]
+	slice = append(slice, 3)
+	fmt.Printf("slice类型:%T,值%v,slice[0]:%v,长度:%d,容量:%d \n", slice, slice, slice[0], len(slice), cap(slice)) //slice类型:[]int,值[1 2 3 3],slice[0]:1,长度:4,容量:6
+
+	//方式二：直接赋值
+	slice1 := []int{1, 2, 3}
+	fmt.Println(slice1) //[1 2 3]
+
+	//方式三：make
+	slice2 := make([]int, 0, 3)
+	fmt.Println(slice2) //[]
+}
+~~~
+
+### 注意点
+
+1.切片不能越界
+
+![image-20230924203855094](images/image-20230924203855094.png)
+
+2.简写
+
+![image-20230924203904365](images/image-20230924203904365.png)
+
+3.切片可以继续切片
+
+![image-20230924203914373](images/image-20230924203914373.png)
+
+4.切片会动态扩容
+
+![image-20230924203815006](images/image-20230924203815006.png)
+
+5.切片的拷贝
+
+~~~go
+package main
+
+import "fmt"
+
+func main() {
+	slice := []int{12, 3, 4}
+	slice1 := make([]int, 6)
+	//slice拷贝到slice1
+	copy(slice1, slice)
+	fmt.Println(slice1) //[12 3 4 0 0 0]
+}
+~~~
+
+## map
+
+### 定义
+
+> 定义：var m map[keyType]valueType，例如 var m map[string]int
+>
+> **注意：map使用前一定要使用make进行初始化分配内存**
+>
+> key、value的类型可以是bool、数字、string、指针、channel，还可以的只包含前面几个类型的接口、结构体、数组
+>
+> key通常为int、string，value通常为数字（整数、浮点数）、string、map、结构体
+>
+> key不可是slice、map、func
+
+### 创建方式
+
+~~~go
+package main
+
+import "fmt"
+
+func main() {
+	//创建map
+	//方式一：声明+make
+	var studentMap map[string]int
+	//必须通过make初始化内存，所以上行即使定义了，也不能直接使用（鸡肋的创建map方式）
+	studentMap = make(map[string]int)
+	studentMap["小王"] = 11
+	studentMap["小李"] = 12
+	fmt.Println(studentMap)
+	//方式二：直接make创建
+	studentMap1 := make(map[string]int)
+	fmt.Println(studentMap1)
+	//方式三：创建并初始化
+	studentMap2 := map[string]int{"小张": 1, "小憩": 2}
+	fmt.Println(studentMap2)
+}
+~~~
+
+### 常见使用
+
+~~~go
+package main
+
+import "fmt"
+
+func main() {
+	studentMap := map[string]int{"a": 1, "b": 12}
+	//查找某个key的val
+	a := studentMap["a"]
+	cc, flag := studentMap["cc"] //也可以返回第二个参数，代表是否存在k
+	fmt.Printf("a的值:%v，cc的值:%v，flag的值:%v \n", a, cc, flag)
+	//新增kv，或更新v
+	studentMap["a"] = 11
+	studentMap["aa"] = 22
+	fmt.Println(studentMap)
+	//删除k
+	delete(studentMap, "b")
+	//遍历
+	for k, v := range studentMap {
+		fmt.Printf("k:%v,v:%v \n", k, v)
+	}
+}
+
+
+a的值:1，cc的值:0，flag的值:false
+map[a:11 aa:22 b:12]
+k:a,v:11
+k:aa,v:22
+~~~
+
+## 对象/结构体（struct）
+
+> go也支持面向对象（OOP），go的面向对象非常简洁，去掉了传统OOP的方法重载、构造函数、隐藏的this指针等。go仍有继承、封装、多态的特性，只是实现方式不同，比如继承，go并没有extends，而是通过匿名字段来实现。
+
+### 创建方式
+
+~~~go
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	//创建struct方式
+	//方式一：定义+赋值
+	var t1 teacher
+	t1.Name = "李老师"
+	t1.Age = 55
+	fmt.Println(t1)
+	//方式二：直接赋值，指定kv，类似map
+	t2 := teacher{Name: "张老师", Age: 23}
+	fmt.Println(t2)
+	//方式三：直接赋值，不指定kv，顺序
+	t3 := teacher{"王老师", 33}
+	fmt.Println(t3)
+	//方式四：new，返回的是指针
+	t4 := new(teacher)
+	(*t4).Name = "a老师"
+	t4.Age = 45      //go的优化，所以这里可以直接像上面一样赋值
+	fmt.Println(*t4) //指针，所有要用*获取值
+	//方式五：指针创建，返回的是指针
+	t5 := &teacher{"b老师", 32}
+	fmt.Println(*t5) //指针，所有要用*获取值
+}
+
+type teacher struct {
+	Name string
+	Age  int
+}
+
+
+{李老师 55}
+{张老师 23}
+{王老师 33}
+{a老师 45} 
+{b老师 32} 
+~~~
+
