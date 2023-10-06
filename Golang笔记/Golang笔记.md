@@ -903,3 +903,349 @@ type teacher struct {
 {b老师 32} 
 ~~~
 
+### struct别名
+
+> 结构体进⾏type重新定义(相当于取别名)，Golang认为是新的数据类型，但是相互间可以强转
+
+~~~go
+package main
+
+import "fmt"
+
+type Teacher struct {
+	Name string
+}
+
+type Tea Teacher
+
+func main() {
+	t1 := Teacher{"t1"}
+	fmt.Println(t1)
+	t2 := Tea{"t2"}
+	fmt.Println(t2)
+	var t3 = Teacher(t2)
+	fmt.Println(t3)
+}
+
+~~~
+
+### 类方法
+
+~~~go
+package main
+
+import "fmt"
+
+type Person struct {
+	Name string
+}
+
+func commonFunc() {
+	fmt.Println("普通方法")
+}
+
+func (p Person) structFunc() {
+	fmt.Println("类方法:", p)
+}
+
+func main() {
+	p := Person{"小伟"}
+	p.structFunc() //类方法: {小伟}
+	commonFunc() //普通方法
+
+}
+~~~
+
+> 注意：**类方法中是值传递**
+
+![image-20231006201346282](images/image-20231006201346282.png)
+
+如希望是地址传递，可借助指针
+
+~~~go
+package main
+
+import "fmt"
+
+type Person struct {
+	Name string
+}
+
+func commonFunc() {
+	fmt.Println("普通方法")
+}
+
+func (p Person) structFunc() {
+	p.Name = "小李"
+	fmt.Println("类方法:", p)
+}
+
+func (p *Person) structFunc2() {
+	p.Name = "小王"
+	fmt.Println("类方法2:", p)
+}
+
+func main() {
+	commonFunc()
+	p := Person{"小伟"}
+	p.structFunc()
+	p.structFunc2() 
+	fmt.Println(p) //小王
+}
+普通方法
+类方法: {小李}
+类方法2: &{小王}
+{小王}
+
+~~~
+
+### String方法(java中的toString)
+
+~~~go
+package main
+
+import "fmt"
+
+type Child struct {
+	Name string
+}
+
+func (c Child) String() string {
+	return "name:" + c.Name
+}
+
+func main() {
+	c := Child{"小伟"}
+	fmt.Println(c) //name:小伟
+}
+~~~
+
+### 跨包创建结构体实例
+
+
+
+![image-20231006203226391](images/image-20231006203226391.png)
+
+![image-20231006203236981](images/image-20231006203236981.png)
+
+![image-20231006203246221](images/image-20231006203246221.png)
+
+![image-20231006203302019](images/image-20231006203302019.png)
+
+![image-20231006203311508](images/image-20231006203311508.png)
+
+### 继承
+
+> go中继承通过**匿名类属性**实现
+>
+> 子类拥有父类的属性和方法（同java）
+
+~~~go
+package main
+
+import "fmt"
+
+type Animal struct {
+	Name string
+	age  int
+}
+type Cat struct {
+	Animal
+}
+
+func main() {
+	a := Animal{"小猫", 12}
+	cat := Cat{a}
+	fmt.Println(cat.Name) //小猫
+}
+
+~~~
+
+若父类中的属性在子类中也有，**就近原则**。
+
+~~~go
+package main
+
+import "fmt"
+
+type Animal struct {
+	Name string
+	age  int
+}
+type Cat struct {
+	Animal
+	Name string
+}
+
+func main() {
+	a := Animal{"小猫", 12}
+	cat := Cat{a, "大猫"}
+	fmt.Println(cat.Name) //大猫
+}
+~~~
+
+多继承
+
+![image-20231006205100565](images/image-20231006205100565.png)
+
+嵌入匿名结构体的指针也可以
+
+![image-20231006205209150](images/image-20231006205209150.png)
+
+### 接口
+
+> 说明：
+>
+> （1）接⼝中可以定义⼀组⽅法，但不需要实现，不需要⽅法体。并且接⼝中不能包含任何变量。到某个⾃定义类型要使⽤的时候（实现接⼝的时候）,再根据具体情况把这些⽅法具体实现出来。
+>
+> （2）实现接⼝要实现所有的⽅法才是实现。
+>
+> （3）Golang中的接⼝不需要显式的实现接⼝。Golang中没有implement关键字。（Golang中实现接⼝是基于⽅法的，不是基于接⼝的）例如：A接⼝ a,b⽅法，B接⼝ a,b⽅法，C结构体 实现了 a,b⽅法 ，那么C实现了A接⼝，也可以说实现了B接⼝ （只要实现全部⽅法即可，和实际接⼝耦合性很低，⽐Java松散得多）
+>
+> （4）接⼝⽬的是为了定义规范，具体由别⼈来实现即可。
+
+~~~go
+package main
+
+import "fmt"
+
+type Hi interface {
+	sayHi()
+}
+type Chinese struct {
+}
+
+func (c Chinese) sayHi() {
+	fmt.Println("你好")
+}
+
+type English struct {
+}
+
+func (e English) sayHi() {
+	fmt.Println("hi")
+}
+
+func greet(hi Hi) {
+	hi.sayHi()
+}
+
+func main() {
+	c := Chinese{}
+	e := English{}
+	greet(c)
+	greet(e)
+}
+
+~~~
+
+
+
+![image-20231006210750730](images/image-20231006210750730.png)
+
+
+
+## 断言
+
+> Go语⾔⾥⾯有⼀个语法，可以直接判断是否是该类型的变量：
+>
+> value, ok := element.(T)，这⾥value就是变量的值，ok是⼀个bool类型，element是interface变量，T是断⾔的类型。
+
+~~~go
+package main
+
+import "fmt"
+
+type A struct {
+}
+type B struct {
+}
+type hi interface {
+	sayHi()
+}
+
+func (a A) sayHi() {
+	fmt.Println("你好")
+}
+func (a A) sayGood() {
+	fmt.Println("很好")
+}
+func (b B) sayHi() {
+	fmt.Println("hi")
+}
+func greet(hi hi) {
+	hi.sayHi()
+	a, flag := hi.(A)
+	if flag {
+		a.sayGood()
+	} else {
+		fmt.Println("没有sayGood方法")
+	}
+}
+func main() {
+	a := A{}
+	greet(a)
+	b := B{}
+	greet(b)
+}
+你好
+很好           
+hi             
+没有sayGood方法
+
+~~~
+
+### switch case by type写法
+
+```
+package main
+
+import "fmt"
+
+type A struct {
+}
+type B struct {
+}
+type hi interface {
+   sayHi()
+}
+
+func (a A) sayHi() {
+   fmt.Println("你好")
+}
+func (a A) sayGood() {
+   fmt.Println("很好")
+}
+func (b B) sayHi() {
+   fmt.Println("hi")
+}
+func greet(hi hi) {
+   hi.sayHi()
+   a, flag := hi.(A)
+   if flag {
+      a.sayGood()
+   } else {
+      fmt.Println("没有sayGood方法")
+   }
+}
+func greet2(hi hi) {
+   hi.sayHi()
+   switch hi.(type) {
+   case A:
+      a := hi.(A)
+      a.sayGood()
+   }
+}
+func main() {
+   a := A{}
+   b := B{}
+   //greet(a)
+   //greet(b)
+   //用switch case by type写法
+   greet2(a)
+   greet2(b)
+}
+你好
+很好
+hi  
+```
