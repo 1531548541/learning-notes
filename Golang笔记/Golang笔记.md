@@ -1249,3 +1249,361 @@ func main() {
 很好
 hi  
 ```
+
+## 文件操作
+
+### 读操作
+
+~~~go
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"io"
+	"os"
+)
+
+func main() {
+	//读取文件内容
+	//方式一：直接读
+	fileContent, _ := os.ReadFile("D:\\1.txt")
+	fmt.Println(string(fileContent))
+	//方式二：buffer
+	file, fileErr := os.Open("D:\\1.txt")
+	defer file.Close()
+	if fileErr != nil {
+		fmt.Println("读取file出错")
+		return
+	}
+	//创建流
+	reader := bufio.NewReader(file)
+	for {
+		readString, err := reader.ReadString(128)
+		if err == io.EOF {
+			break
+		}
+		fmt.Print(readString)
+	}
+}
+~~~
+
+写操作
+
+~~~go
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+)
+
+func main() {
+	//写文件
+	//方式一：直接读
+	//fileContent, _ := os.WriteFile("D:\\2.txt",,)
+	//fmt.Println(string(fileContent))
+	//方式二：buffer
+	file, fileErr := os.OpenFile("D:\\3.txt", 1, 666)
+	defer file.Close()
+	if fileErr != nil {
+		fmt.Println("读取file出错")
+		return
+	}
+	//创建流
+	writer := bufio.NewWriter(file)
+	writer.WriteString("go写入file")
+	//flush了真正写入
+	writer.Flush()
+	fileMode := os.FileMode(0666).String()
+	fmt.Println(fileMode)
+}
+
+~~~
+
+## 协程
+
+> 轻量级线程
+>
+> 特点：
+>
+> **主死从随**：主线程死了，即使协程未完成也死
+
+~~~go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func test() {
+	for i := 1; i <= 10; i++ {
+		fmt.Println("test...", i)
+	}
+}
+func main() {
+	//开启协程
+	go test()
+	for i := 1; i <= 10; i++ {
+		fmt.Println("main...", i)
+		time.Sleep(time.Second)
+	}
+}
+
+~~~
+
+### waitGroup
+
+> WaitGroup⽤于等待⼀组线程的结束。⽗线程调⽤Add⽅法来设定应等待的线程的数量。每个被等待的线程在结束时应调⽤Done⽅法。同时，主线程⾥可以调⽤Wait⽅法阻塞⾄所有线程结束。
+>
+> **解决主线程在⼦协程结束后⾃动结束**
+
+~~~go
+package main
+
+import (
+	"fmt"
+	"sync"
+)
+
+// 无需赋值
+var wg sync.WaitGroup
+
+func main() {
+	for i := 0; i < 5; i++ {
+		wg.Add(1) //+1
+		go func(i int) {
+			fmt.Println(i)
+			wg.Done() //-1
+		}(i)
+	}
+	//main线程会阻塞，知道waitGroup减到0
+	wg.Wait()
+}
+~~~
+
+### 互斥锁
+
+~~~go
+package main
+
+import (
+	"fmt"
+	"sync"
+)
+
+var waitGroup sync.WaitGroup
+var lock sync.Mutex
+var num = 0
+
+func add() {
+	defer waitGroup.Done()
+	for i := 0; i < 10000; i++ {
+		lock.Lock()
+		num++
+		lock.Unlock()
+	}
+}
+
+func sub() {
+	defer waitGroup.Done()
+	for i := 0; i < 10000; i++ {
+		lock.Lock()
+		num--
+		lock.Unlock()
+	}
+}
+
+func main() {
+	waitGroup.Add(2)
+	go add()
+	go sub()
+	waitGroup.Wait()
+	fmt.Println(num)
+}
+
+~~~
+
+### 读写锁
+
+~~~go
+package main
+
+import (
+	"fmt"
+	"sync"
+	"time"
+)
+
+var rwLock sync.RWMutex
+var waitgroup sync.WaitGroup
+
+func read() {
+	defer waitgroup.Done()
+	rwLock.RLock()
+	fmt.Println("读数据-开始")
+	time.Sleep(time.Second)
+	fmt.Println("读数据-结束")
+	rwLock.RUnlock()
+}
+
+func write() {
+	defer waitgroup.Done()
+	rwLock.Lock()
+	fmt.Println("写数据-开始")
+	time.Sleep(time.Second)
+	fmt.Println("写数据-结束")
+	rwLock.Unlock()
+}
+
+func main() {
+	waitgroup.Add(6)
+	//场景：读多写少
+	for i := 0; i < 5; i++ {
+		go read()
+	}
+	go write()
+	waitgroup.Wait()
+}
+
+~~~
+
+![image-20231011215109462](images/image-20231011215109462.png)
+
+## 管道
+
+### 定义
+
+> 管道（channel）特质介绍：                    var 变量名 chan 数据类型
+>
+> （1）管道本质就是**队列**
+>
+> （2）数据是先进先出
+>
+> （3）自身线程安全，多协程访问时，不需要加锁，channel本身就是线程安全的
+>
+> （4）管道有类型的，⼀个string的管道只能存放string类型数据
+>
+> （5）管道是引⽤类型，必须初始化才能写⼊数据，即make后才能使⽤
+
+~~~go
+package main
+
+import "fmt"
+
+func main() {
+	//申明一个chan,int类型，容量3
+	var initChan chan int
+	initChan = make(chan int, 3)
+	initChan <- 3
+	initChan <- 2
+	initChan <- 1
+	//读
+	chanLen := len(initChan)
+	for i := 0; i < chanLen; i++ {
+		fmt.Println(<-initChan)
+	}
+	//再写
+	initChan <- 4
+	fmt.Printf("chan的实际长度:%v,容量:%v", len(initChan), cap(initChan))
+    close(initChan)
+}
+
+~~~
+
+### 管道关闭
+
+> close(intChan)
+>
+> **关闭后无法写，但可以读**
+
+### 管道遍历
+
+~~~go
+package main
+
+import "fmt"
+
+func main() {
+	//申明一个chan,int类型，容量3
+	var initChan chan int
+	initChan = make(chan int, 3)
+	initChan <- 3
+	initChan <- 2
+	initChan <- 1
+	//读
+	//方式一
+	chanLen := len(initChan)
+	for i := 0; i < chanLen; i++ {
+		fmt.Println(<-initChan)
+	}
+	//再写
+	initChan <- 4
+	//方式二：
+	for i := range initChan {
+		fmt.Println(i)
+	}
+	close(initChan)
+}
+~~~
+
+### 只写/只读
+
+~~~go
+package main
+
+import "fmt"
+
+func main() {
+	//只写chan
+	var readChan chan<- int = make(chan int, 3)
+	//只读chan
+	var writeChan <-chan int = make(chan int, 3)
+	readChan <- 3
+	//fmt.Println(<-readChan)   //报错
+	//writeChan <- 3            //报错
+	fmt.Println(<-writeChan)
+}
+~~~
+
+### select
+
+> select功能：解决多个管道的选择问题，也可以叫做多路复⽤，可以从多个管道中随机公平地选择⼀个来执⾏
+>
+> PS：case后⾯必须进⾏的是io操作，不能是等值，随机去选择⼀个io操作
+>
+> PS：default防⽌select被阻塞住，加⼊default
+
+~~~go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func main() {
+	intChan := make(chan int, 1)
+	go func() {
+		time.Sleep(time.Second * 3)
+		intChan <- 3
+	}()
+	strChan := make(chan string, 1)
+	go func() {
+		time.Sleep(time.Second * 1)
+		strChan <- "a"
+	}()
+	time.Sleep(time.Second * 3)
+	select {
+	case v := <-intChan:
+		fmt.Println(v)
+	case v := <-strChan:
+		fmt.Println(v)
+	default:
+		fmt.Println("防⽌select被阻塞")
+	}
+}
+~~~
+
