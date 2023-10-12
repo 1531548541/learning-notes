@@ -1607,3 +1607,286 @@ func main() {
 }
 ~~~
 
+## socket
+
+### server
+
+~~~go
+package main
+
+import (
+	"fmt"
+	"net"
+)
+
+func process(conn net.Conn) {
+	defer conn.Close()
+	for {
+		buffer := make([]byte, 1024)
+		n, err := conn.Read(buffer)
+		if err != nil {
+			fmt.Println("读取client消息失败:", err)
+			return
+		}
+		fmt.Println("读取client消息：", string(buffer[:n]))
+	}
+}
+
+func main() {
+	fmt.Println("server start...")
+	listen, err := net.Listen("tcp", "127.0.0.1:18181")
+	defer listen.Close()
+	if err != nil {
+		fmt.Println("监听失败:", err)
+		return
+	}
+	for {
+		conn, e := listen.Accept()
+		if err != nil {
+			fmt.Println("获取client连接失败:", e)
+			return
+		}
+		fmt.Println("获取到的连接:", conn)
+		//开启协程获取client发送的消息
+		go process(conn)
+	}
+}
+~~~
+
+### client
+
+~~~go
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"net"
+	"os"
+)
+
+func main() {
+	fmt.Println("client start...")
+	conn, err := net.Dial("tcp", "127.0.0.1:18181")
+	defer conn.Close()
+	if err != nil {
+		fmt.Println("client 连接失败：", err)
+		return
+	}
+	reader := bufio.NewReader(os.Stdin)
+	readString, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Println("读取控制台失败:", err)
+		return
+	}
+	//写入conn
+	conn.Write([]byte(readString))
+	fmt.Println("client发送成功,conn:", conn)
+}
+~~~
+
+## 反射
+
+> 【1】反射相关的函数
+>
+> 1) reflect.TypeOf(变量名)，获取变量的类型，返回reflect.Type类型
+>
+> 2) reflect.ValueOf(变量名)，获取变量的值，返回reflect.Value类型(reflect.Value是⼀个结构体类型),通过reflect.Value，可以获取到关于该变量的很多信息。**注意：reflect.ValueOf返回的类型本质还是反射类型，无法直接当实际类型操作。**
+>
+> 【2】代码
+>
+> ![image-20231012095106712](images/image-20231012095106712.png)
+
+### 基本类型
+
+#### 获取type和value
+
+~~~go
+package main
+
+import (
+	"fmt"
+	"reflect"
+)
+
+// 利⽤⼀个函数，函数的参数定义为空接⼝
+func testReflect(i interface{}) {
+	//1.调⽤TypeOf函数，返回reflect.Type类型数据
+	iType := reflect.TypeOf(i)
+	fmt.Printf("反射获取iType:%v,实际类型:%T \n", iType, iType)
+	//2.调⽤ValueOf函数，返回reflect.Value类型数据
+	iValue := reflect.ValueOf(i)
+	fmt.Printf("反射获取iValue:%v,实际类型:%T \n", iValue, iValue)
+	//3.value转成具体的类型进行运算
+	//方式一
+	num1 := 20 + iValue.Int()
+	fmt.Println("num1:", num1)
+	//方式二：断言
+	iInterface := iValue.Interface()
+	relVal := iInterface.(int32)
+	num2 := 20 + relVal
+	fmt.Println("num2:", num2)
+}
+
+func main() {
+	var num int32 = 2
+	testReflect(num)
+}
+~~~
+
+#### 修改变量值
+
+> 传入地址，搭配Elem()
+>
+> Emem函数说明：func (v Value) Elem() Value，Elem返回v持有的接口保管的值的Value封装，或者v持有指针指向值的Value封装。如果v的Kind不是interface或指针会异常；如果v持有的值是nil，会返回Value零值。
+>
+> 
+
+```go
+package main
+
+import (
+   "fmt"
+   "reflect"
+)
+
+func main() {
+   num := 2
+   //注意！！！！此处需要传地址！！！！！！！！
+   numValue := reflect.ValueOf(&num)
+   //setInt需要保证调用者是地址，否则painc
+   //Elem作用：返回Value封装
+   numValue.Elem().SetInt(22)
+   fmt.Println(num)
+}
+```
+
+
+
+### 结构体
+
+#### 获取type和value
+
+~~~go
+package main
+
+import (
+	"fmt"
+	"reflect"
+)
+
+type Stu struct {
+	name string
+}
+
+func testStructReflect(i interface{}) {
+	//1.调⽤TypeOf函数，返回reflect.Type类型数据
+	iType := reflect.TypeOf(i)
+	fmt.Printf("反射获取iType:%v,实际类型:%T \n", iType, iType)
+	//2.调⽤ValueOf函数，返回reflect.Value类型数据
+	iValue := reflect.ValueOf(i)
+	fmt.Printf("反射获取iValue:%v,实际类型:%T \n", iValue, iValue)
+	//3.value转成具体的类型进行运算
+	//断言
+	iInterface := iValue.Interface()
+	stu, flag := iInterface.(Stu)
+	if flag {
+		fmt.Println("stu:", stu)
+	}
+}
+
+func main() {
+	stu := Stu{"zfb"}
+	testStructReflect(stu)
+}
+
+~~~
+
+#### 操作结构体的属性和方法
+
+~~~go
+package main
+
+import (
+	"fmt"
+	"reflect"
+)
+
+type Person struct {
+	Name   string
+	age    int
+	weight int
+}
+
+func (p Person) C() {
+	fmt.Println("func c")
+}
+
+func (p Person) A(a int, b int) int {
+	return a + b
+}
+func (p Person) B() {
+	fmt.Println("func b")
+}
+
+func main() {
+	p := Person{Name: "zfb", age: 22, weight: 98}
+	pType := reflect.TypeOf(p)
+	pValue := reflect.ValueOf(p)
+	//遍历field和其value
+	for i := 0; i < pValue.NumField(); i++ {
+		fmt.Printf("%v:%v \n", pType.Field(i).Name, pValue.Field(i))
+	}
+	//调⽤C()⽅法：
+	//调⽤⽅法，⽅法的⾸字⺟必须⼤写才能有对应的反射的访问权限
+	//⽅法的顺序按照ASCII的顺序排列的，a,b,c,,,,,,索引：0,1,2，，，，，
+	pValue.Method(2).Call(nil)
+	//调用A()方法
+	//利用切片增加入参
+	var parms []reflect.Value
+	parms = append(parms, reflect.ValueOf(10))
+	parms = append(parms, reflect.ValueOf(20))
+	res := pValue.Method(0).Call(parms)
+	fmt.Println("func返回结果:", res[0].Int())
+	//修改name属性值
+	pPtrValue := reflect.ValueOf(&p)
+	pPtrValue.Elem().Field(0).SetString("zfc")
+	fmt.Println(p)
+}
+~~~
+
+#### 修改field值
+
+### 变量类别
+
+> 获取变量的类别：两种⽅式：
+>
+> （1）reflect.Type.Kind()
+>
+> （2）reflect.Value.Kind()
+>
+> **Type和 Kind 的区别**
+>
+> Type是类型, Kind是类别,Type和Kind 可能是相同的，也可能是不同的.
+>
+> ⽐如:var num int = 10 num的Type是int , Kind也是int
+>
+> ⽐如:var stu Studentstu的 Type是 pkg1.Student , Kind是struct
+
+~~~go
+package main
+
+import (
+	"fmt"
+	"reflect"
+)
+
+func main() {
+	num := 2
+	numType := reflect.TypeOf(num)
+	numValue := reflect.ValueOf(num)
+    //typeKind:int,valueKind:int
+	fmt.Printf("typeKind:%v,valueKind:%v \n", numType.Kind(), numValue.Kind())
+}
+~~~
+
