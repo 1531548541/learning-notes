@@ -524,8 +524,274 @@ PUT /wujie/_doc/1
 
 # DSL
 
+## filter
+
+~~~json
+//age>30&last_name=smith的所有员工
+GET /megacorp/employee/_search
+{
+    "query": {
+        "filtered": {
+            "filter": {
+                "range": {
+                    "age": {
+                        "gt": 30
+                    }
+                }
+            },
+            "query": {
+                "match": {
+                    "last_name": "smith"
+                }
+            }
+        }
+    }
+}
+~~~
+
+## match
+
+> 相关性查询，ES会自动分词
+
+~~~json
+GET /megacorp/employee/_search
+{
+    "query": {
+        "match": {
+            "about": "rock climbing"
+        }
+    }
+}
+
+
+
+//查询结果如下：有相关的都被查到，但score不同
+{
+...
+"hits": {
+        "total": 2,
+        "max_score": 0.16273327,
+        "hits": [
+            {
+...
+"_score": 0.16273327, <1>
+"_source": {
+                    "first_name": "John",
+                    "last_name": "Smith",
+                    "age": 25,
+                    "about": "I love to go rock climbing",
+                    "interests": [
+                        "sports",
+                        "music"
+                    ]
+                }
+            },
+            {
+...
+"_score": 0.016878016, <2>
+"_source": {
+                    "first_name": "Jane",
+                    "last_name": "Smith",
+                    "age": 32,
+                    "about": "I like to collect rock albums",
+                    "interests": [
+                        "music"
+                    ]
+                }
+            }
+        ]
+    }
+}
+~~~
+
+## match_phrase
+
+> 与match相对，全词搜索（短语搜索）
+
+~~~json
+GET /megacorp/employee/_search
+{
+    "query": {
+        "match_phrase": {
+            "about": "rock climbing"
+        }
+    }
+}
+~~~
+
+## highlight
+
+~~~json
+GET /megacorp/employee/_search
+{
+    "query": {
+        "match_phrase": {
+            "about": "rock climbing"
+        }
+    },
+    "highlight": {
+        "fields": {
+            "about": {}
+        }
+    }
+}
+
+
+//查询结果如下：<em></em>包裹
+{
+...
+"hits": {
+        "total": 1,
+        "max_score": 0.23013961,
+        "hits": [
+            {
+...
+"_score": 0.23013961,
+                "_source": {
+                    "first_name": "John",
+                    "last_name": "Smith",
+                    "age": 25,
+                    "about": "I love to go rock climbing",
+                    "interests": [
+                        "sports",
+                        "music"
+                    ]
+                },
+                "highlight": {
+                    "about": [
+                        "I love to go <em>rock</em> <em>climbing</em>" <1>
+                    ]
+                }
+            }
+        ]
+    }
+}
+~~~
+
+## aggs
+
+~~~json
+GET /megacorp/employee/_search
+{
+    "aggs": {
+        "all_interests": {
+            "terms": {
+                "field": "interests"
+            }
+        }
+    }
+}
+
+
+//返回结果：
+{
+...
+"hits": { ...
+    },
+    "aggregations": {
+        "all_interests": {
+            "buckets": [
+                {
+                    "key": "music",
+                    "doc_count": 2
+                },
+                {
+                    "key": "forestry",
+                    "doc_count": 1
+                },
+                {
+                    "key": "sports",
+                    "doc_count": 1
+                }
+            ]
+        }
+    }
+}
+~~~
+
+~~~json
+//统计每种兴趣的员工平均年龄
+GET /megacorp/employee/_search
+{
+    "aggs": {
+        "all_interests": {
+            "terms": {
+                "field": "interests"
+            },
+            "aggs": {
+                "avg_age": {
+                    "avg": {
+                        "field": "age"
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+//返回结果
+...
+"all_interests": {
+    "buckets": [
+        {
+            "key": "music",
+            "doc_count": 2,
+            "avg_age": {
+                "value": 28.5
+            }
+        },
+        {
+            "key": "forestry",
+            "doc_count": 1,
+            "avg_age": {
+                "value": 35
+            }
+        },
+        {
+            "key": "sports",
+            "doc_count": 1,
+            "avg_age": {
+                "value": 25
+            }
+        }
+    ]
+}
+~~~
+
+# 分布式集群
+
+## 集群健康
+
+| 颜色   | 说明                                       |
+| ------ | ------------------------------------------ |
+| green  | 所有主要分片和复制分片都可用               |
+| yellow | 所有主要分片可用，但不是所有复制分片都可用 |
+| red    | 不是所有的主要分片都可用                   |
+
+查看集群健康
+
+~~~json
+GET /_cluster/health
+
+//返回结果：
+{
+"cluster_name": "elasticsearch",
+"status": "green", <1>
+"timed_out": false,
+"number_of_nodes": 1,
+"number_of_data_nodes": 1,
+"active_primary_shards": 0,
+"active_shards": 0,
+"relocating_shards": 0,
+"initializing_shards": 0,
+"unassigned_shards": 0
+}
+~~~
+
 
 
 # 路由TODO
 
 >
+
