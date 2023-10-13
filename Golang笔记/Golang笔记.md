@@ -1322,7 +1322,7 @@ func main() {
 
 ~~~
 
-## 协程
+## 协程&sync
 
 > 轻量级线程
 >
@@ -1471,6 +1471,80 @@ func main() {
 ~~~
 
 ![image-20231011215109462](images/image-20231011215109462.png)
+
+### once
+
+> 只执行一次函数
+
+```go
+package main
+
+import (
+	"fmt"
+	"sync"
+)
+
+var once = sync.Once{}
+
+func main() {
+	onceFunc()
+	onceFunc()
+}
+
+func onceFunc() {
+	once.Do(func() {
+		fmt.Println("执行once func")
+	})
+}
+```
+
+注意坑：由于go是值传递，所以传入的once会重复执行，不起效
+
+```go
+package main
+
+import (
+   "fmt"
+   "sync"
+)
+
+func main() {
+   var once = sync.Once{}
+    //！！！！！！！！！！会执行两次，不起效！！！！！！！！！！！！
+   onceFunc(once)
+   onceFunc(once)
+}
+
+func onceFunc(once sync.Once) {
+   once.Do(func() {
+      fmt.Println("执行once func")
+   })
+}
+```
+
+**传指针才正确**
+
+```
+package main
+
+import (
+   "fmt"
+   "sync"
+)
+
+var once = sync.Once{}
+
+func main() {
+   onceFunc(&once)
+   onceFunc(&once)
+}
+
+func onceFunc(once *sync.Once) {
+   once.Do(func() {
+      fmt.Println("执行once func")
+   })
+}
+```
 
 ## 管道
 
