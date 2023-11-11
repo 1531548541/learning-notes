@@ -1,12 +1,15 @@
 ## 基本数据类型
 
+> redis的数据结构比较特殊，本质上都是`kv`，过期时间也是针对k。
+
 ### string（SDS，动态字符串）
 
 ![image-20220309165005792](images/image-20220309165005792.png)
 
-1. free:还剩多少空间 len:字符串长度 buf:存放的字符数组。
-2. 空间预分配：SDS 被修改后，程序不仅会为 SDS 分配所需要的必须空间，还会分配额外的未使用空间。
-3. 惰性空间释放：当对 SDS 进行缩短操作时，程序并不会回收多余的内存空间，而是使用 free 字段将这些字节数量记录下来不释放，后面如果需要 append 操作，则直接使用 free 中未使用的空间，减少了内存的分配。
+> 1. free:还剩多少空间 len:字符串长度 buf:存放的字符数组。
+> 2. 空间预分配：SDS 被修改后，程序不仅会为 SDS 分配所需要的必须空间，还会分配额外的未使用空间。
+> 3. 惰性空间释放：当对 SDS 进行缩短操作时，程序并不会回收多余的内存空间，而是使用 free 字段将这些字节数量记录下来不释放，后面如果需要 append 操作，则直接使用 free 中未使用的空间，减少了内存的分配。
+>
 
 > 总结：
 >
@@ -158,31 +161,281 @@ OK
 (error) ERR increment or decrement would overflow 
 ~~~
 
+### list
+
+> Redis 的列表相当于 Java 语言里面的 LinkedList，注意它是链表而不是数组。这意味着list 的插入和删除操作非常快，时间复杂度为 O(1)，但是索引定位很慢，时间复杂度为O(n)，这点让人非常意外。
+>
+> 当列表弹出了最后一个元素之后，该数据结构自动被删除，内存被回收。
+>
+> Redis 的列表结构常用来做异步队列使用。将需要延后处理的任务结构体序列化成字符串塞进 Redis 的列表，另一个线程从这个列表中轮询数据进行处理。
+
+#### 实战
+
+**右边进左边出：队列** 
+
+~~~shell
+\> rpush books python java golang 
+
+(integer) 3 
+
+\> llen books 
+
+(integer) 3 
+
+\> lpop books 
+
+"python" 
+
+\> lpop books 
+
+"java" 
+
+\> lpop books 
+
+"golang" 
+
+\> lpop books 
+
+(nil) 
+~~~
+
+
+
+**右边进右边出：栈** 
+
+~~~sh
+\> rpush books python java golang 
+
+(integer) 3 
+
+\> rpop books 
+
+"golang" 
+
+\> rpop books 
+
+"java" 
+
+\> rpop books 
+
+"python" 
+
+\> rpop books
+
+(nil) 
+~~~
+
+
+
+**慢操作** 
+
+> lindex 相当于 Java 链表的 get(int index)方法，它需要对链表进行遍历，性能随着参数index 增大而变差。 ltrim 和字面上的含义不太一样，个人觉得它叫 lretain(保留) 更合适一些，因为 ltrim 跟的两个参数 start_index 和 end_index 定义了一个区间，在这个区间内的值，ltrim 要保留，区间之外统统砍掉。我们可以通过 ltrim 来实现一个定长的链表，这一点非常有用。index 可以为负数，index=-1 表示倒数第一个元素，同样 index=-2 表示倒数第二个元素。
+
+~~~sh
+\> rpush books python java golang 
+
+(integer) 3 
+
+\> lindex books 1 # O(n) 慎用
+
+"java" 
+
+\> lrange books 0 -1 # 获取所有元素，O(n) 慎用
+
+1) "python" 
+
+2) "java" 
+
+3) "golang" 
+
+\> ltrim books 1 -1 # O(n) 慎用
+
+OK 
+
+\> lrange books 0 -1 
+
+1) "java" 
+
+2) "golang" 
+
+\> ltrim books 1 0 # 这其实是清空了整个列表，因为区间范围长度为负
+
+OK 
+
+\> llen books 
+
+(integer) 0
+~~~
+
 
 
 ### ziplist
 
-压缩列表是 List 、hash、 sorted Set 三种数据类型底层实现之一。
-
-当一个列表只有少量数据的时候，并且每个列表项要么就是小整数值，要么就是长度比较短的字符串，那么 Redis 就会使用压缩列表来做列表键的底层实现。
+> 压缩列表是 List 、hash、 sorted Set 三种数据类型底层实现之一。
+>
+> 当一个列表只有少量数据的时候，并且每个列表项要么就是小整数值，要么就是长度比较短的字符串，那么 Redis 就会使用压缩列表来做列表键的底层实现。
+>
 
 ![image-20220304174441024](images/image-20220304174441024.png)
 
 ### quicklist
 
-**quicklist 是 ziplist 和 linkedlist 的混合体，它将 linkedlist 按段切分，每一段使用 ziplist 来紧凑存储，多个 ziplist 之间使用双向指针串接起来。**
+> **quicklist 是 ziplist 和 linkedlist 的混合体，它将 linkedlist 按段切分，每一段使用 ziplist 来紧凑存储，多个 ziplist 之间使用双向指针串接起来。**
 
 ![image-20220304174431088](images/image-20220304174431088.png)
 
 ### skipList 
 
-sorted set 类型的排序功能便是通过「跳跃列表」数据结构来实现。
-
-跳跃表（skiplist）是一种有序数据结构，它通过在每个节点中维持多个指向其他节点的指针，从而达到快速访问节点的目的。
-
-跳表在链表的基础上，增加了多层级索引，通过索引位置的几个跳转，实现数据的快速定位，如下图所示：
+> sorted set 类型的排序功能便是通过「跳跃列表」数据结构来实现。
+>
+> 跳跃表（skiplist）是一种有序数据结构，它通过在每个节点中维持多个指向其他节点的指针，从而达到快速访问节点的目的。
+>
+> 跳表在链表的基础上，增加了多层级索引，通过索引位置的几个跳转，实现数据的快速定位，如下图所示：
+>
 
 ![image-20220304174422245](images/image-20220304174422245.png)
+
+
+
+### hash
+
+> 跟java中的hashMap一样，数组+链表。
+>
+> 不同的是，Redis 的字典的值只能是字符串，另外它们 rehash 的方式不一样，因为Java 的 HashMap 在字典很大时，rehash 是个耗时的操作，需要一次性全部 rehash。Redis 为了高性能，不能堵塞服务，所以采用了**渐进式 rehash** 策略。
+
+#### 渐进式 rehash
+
+![image-20231111212956056](images/image-20231111212956056.png)
+
+**渐进式 rehash** 会在 rehash 的同时，保留新旧两个 hash 结构，查询时会同时查询两个hash 结构，然后在后续的定时任务中以及 hash 的子指令中，循序渐进地将旧 hash 的内容一点点迁移到新的 hash 结构中。
+
+
+
+#### 实战
+
+~~~sh
+\> hset books java "think in java" # 命令行的字符串如果包含空格，要用引号括起来
+
+(integer) 1 
+
+\> hset books golang "concurrency in go" 
+
+(integer) 1 
+
+\> hset books python "python cookbook" 
+
+(integer) 1 
+
+\> hgetall books # entries()，key 和 value 间隔出现
+
+1) "java" 
+
+2) "think in java" 
+
+3) "golang" 
+
+4) "concurrency in go" 
+
+5) "python" 
+
+6) "python cookbook" 
+
+\> hlen books 
+
+(integer) 3 
+
+\> hget books java 
+
+"think in java" 
+
+\> hset books golang "learning go programming" # 因为是更新操作，所以返回 0
+
+(integer) 0 
+
+\> hget books golang "learning go programming" 
+
+\> hmset books java "effective java" python "learning python" golang "modern golang 
+
+programming" # 批量 set 
+
+OK 
+
+# 老钱又老了一岁
+> hincrby user-laoqian age 1 
+(integer) 30
+~~~
+
+### set
+
+> Redis 的集合相当于 Java 语言里面的 HashSet，它内部的键值对是`无序`的`唯一`的。它的内部实现相当于一个特殊的字典，字典中所有的 value 都是一个值 NULL。
+
+#### 实战
+
+~~~sh
+> sadd books python 
+(integer) 1 
+> sadd bookspython # 重复
+(integer) 0 
+> sadd books java golang 
+(integer) 2 
+> smembers books # 注意顺序，和插入的并不一致，因为 set 是无序的
+1) "java" 
+2) "python" 
+3) "golang" 
+> sismember books java # 查询某个 value 是否存在，相当于 contains(o)
+(integer) 1 
+> sismember books rust 
+(integer) 0 
+> scard books # 获取长度相当于 count()
+(integer) 3 
+> spop books # 弹出一个
+"java"
+~~~
+
+### zset
+
+> 它类似于 Java 的 SortedSet 和 HashMap 的结合体，一方面它是一个 set，保证了内部value 的唯一性，另一方面它可以给每个 value 赋予一个 `score`，代表这个 value 的排序权重。`内部实现为「跳跃列表」`。
+
+#### 实战
+
+~~~sh
+> zadd books 9.0 "think in java" 
+(integer) 1 
+> zadd books 8.9 "java concurrency" 
+(integer) 1 
+> zadd books 8.6 "java cookbook" 
+(integer) 1 
+> zrange books 0 -1 # 按 score 排序列出，参数区间为排名范围
+1) "java cookbook" 
+2) "java concurrency" 
+3) "think in java" 
+> zrevrange books 0 -1 # 按 score 逆序列出，参数区间为排名范围
+1) "think in java" 
+2) "java concurrency" 
+3) "java cookbook" 
+> zcard books # 相当于 count()
+(integer) 3 
+> zscore books "java concurrency" # 获取指定 value 的 score
+"8.9000000000000004" # 内部 score 使用 double 类型进行存储，所以存在小数点精度问题
+> zrank books "java concurrency" # 排名
+(integer) 1 
+> zrangebyscore books 0 8.91 # 根据分值区间遍历 zset
+1) "java cookbook" 
+2) "java concurrency" 
+> zrangebyscore books -inf 8.91 withscores # 根据分值区间 (-∞, 8.91] 遍历 zset，同时返
+回分值。inf 代表 infinite，无穷大的意思。
+1) "java cookbook" 
+2) "8.5999999999999996" 
+3) "java concurrency" 
+4) "8.9000000000000004" 
+> zrem books "java concurrency" # 删除 value
+(integer) 1 
+> zrange books 0 -1 
+1) "java cookbook" 
+2) "think in java"
+~~~
+
+
 
 ## redis多线程配置
 
