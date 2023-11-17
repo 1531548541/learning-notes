@@ -602,6 +602,127 @@ OK
 
 用于将多个 pf 计数值累加在一起形成一个新的 pf 值。比如在网站中我们有两个内容差不多的页面，运营说需要这两个页面的数据进行合并。其中页面的 UV 访问量也需要合并，那这个时候 pfmerge 就可以派上用场了。
 
+## GeoHash
+
+> 存储经纬度，用于计算距离、附近等，底层zset。
+
+### geoadd
+
+新增数据
+
+~~~sh
+127.0.0.1:6379> geoadd company 116.48105 39.996794 juejin
+(integer) 1
+127.0.0.1:6379> geoadd company 116.514203 39.905409 ireader
+(integer) 1
+127.0.0.1:6379> geoadd company 116.489033 40.007669 meituan
+(integer) 1
+127.0.0.1:6379> geoadd company 116.562108 39.787602 jd 116.334255 40.027400 xiaomi
+(integer) 2
+~~~
+
+### geodist
+
+计算两个元素之间的距离，携带集合名称、2 个名称和距离单位
+
+~~~sh
+127.0.0.1:6379> geodist company juejin ireader km
+"10.5501"
+127.0.0.1:6379> geodist company juejin meituan km
+"1.3878"
+127.0.0.1:6379> geodist company juejin jd km
+"24.2739"
+127.0.0.1:6379> geodist company juejin xiaomi km
+"12.9606"
+127.0.0.1:6379> geodist company juejin juejin km
+"0.0000"
+~~~
+
+### geopos
+
+获取集合中任意元素的经纬度坐标，可以一次获取多个。获取的经纬度坐标和 geoadd 进去的坐标有`轻微的误差`，原因是 geohash 对二维坐标进行的一维映射是有损的，通过映射再还原回来的值会出现较小的差别。
+
+~~~sh
+127.0.0.1:6379> geopos company juejin
+1) 1) "116.48104995489120483"
+ 2) "39.99679348858259686"
+127.0.0.1:6379> geopos company ireader
+1) 1) "116.5142020583152771"
+ 2) "39.90540918662494363"
+127.0.0.1:6379> geopos company juejin ireader
+1) 1) "116.48104995489120483"
+ 2) "39.99679348858259686"
+2) 1) "116.5142020583152771"
+ 2) "39.90540918662494363"
+~~~
+
+###  geohash
+
+获取元素的经纬度编码字符串，上面已经提到，它是 base32 编码。 可以使用这个编码值去 http://geohash.org/${hash}中进行直接定位，它是 geohash 的标准编码值。
+
+~~~sh
+127.0.0.1:6379> geohash company ireader
+1) "wx4g52e1ce0"
+127.0.0.1:6379> geohash company juejin
+1) "wx4gd94yjn0"
+~~~
+
+![image-20231117092627430](images/image-20231117092627430.png)
+
+### georadiusbymember
+
+查询指定元素附近的其它元素，它的参数非常复杂。
+
+~~~sh
+# 范围 20 公里以内最多 3 个元素按距离正排，它不会排除自身
+127.0.0.1:6379> georadiusbymember company ireader 20 km count 3 asc
+1) "ireader"
+2) "juejin"
+3) "meituan"
+# 范围 20 公里以内最多 3 个元素按距离倒排
+127.0.0.1:6379> georadiusbymember company ireader 20 km count 3 desc
+1) "jd"
+2) "meituan"
+3) "juejin"
+# 三个可选参数 withcoord withdist withhash 用来携带附加参数
+# withdist 很有用，它可以用来显示距离
+127.0.0.1:6379> georadiusbymember company ireader 20 km withcoord withdist withhash count 3 asc
+1) 
+ 1) "ireader"
+ 2) "0.0000"
+ 3) (integer) 4069886008361398
+ 4) 1) "116.5142020583152771"
+ 2) "39.90540918662494363"
+2) 
+ 1) "juejin"
+ 2) "10.5501"
+ 3) (integer) 4069887154388167
+ 4) 1) "116.48104995489120483"
+ 2) "39.99679348858259686"
+3) 
+ 1) "meituan"
+ 2) "11.5748"
+ 3) (integer) 4069887179083478
+ 4) 1) "116.48903220891952515"
+ 2) "40.00766997707732031"
+~~~
+
+Redis 还提供了根据坐标值来查询附近的元素，这个指令更加有用，它可以根据用户的定位来计算「附近的车」，「附近的餐馆」等。它的参数和 georadiusbymember 基本一致，除了将目标元素改成经纬度坐标值。
+
+~~~sh
+127.0.0.1:6379> georadius company 116.514202 39.905409 20 km withdist count 3 asc
+1) 1) "ireader"
+ 2) "0.0000"
+2) 1) "juejin"
+ 2) "10.5501"
+3) 1) "meituan"
+ 2) "11.5748"
+~~~
+
+在一个地图应用中，车的数据、餐馆的数据、人的数据可能会有百万千万条，如果使用Redis 的 Geo 数据结构，它们将全部放在一个 zset 集合中。在 Redis 的集群环境中，集合可能会从一个节点迁移到另一个节点，如果单个 key 的数据过大，会对集群的迁移工作造成较大的影响，在集群环境中单个 key 对应的数据量不宜超过 1M，否则会导致集群迁移出现卡顿现象，影响线上服务的正常运行。
+
+所以，这里建议 Geo 的数据使用单独的 Redis 实例部署，不使用集群环境。如果数据量过亿甚至更大，就需要对 Geo 数据进行拆分，按国家拆分、按省拆分，按市拆分，在人口特大城市甚至可以按区拆分。这样就可以显著降低单个 zset 集合的大小。
+
 # 布隆过滤器
 
 > 创建布隆时两个参数：初始大小、误判率。
