@@ -451,7 +451,332 @@ OK
 
 # 其他数据类型
 
-## bitmap
+## 位图（bitmap）
+
+> 位图的内容其实就是普通的字符串，本质就是byte[]，所以读取的时候是按8bit转成ASCII对应的字符串。自动扩展，如果设置了某个偏移位置超出了现有的内容范围，就会自动将位数组进行零扩充。
+>
+> 「零存」就是使用 setbit 对位值进行逐个设置，「整存」就是使用字符串一次性填充所有位数组，覆盖掉旧值。
+
+### 实战
+
+将hello存入，注意：bitmap存数据是按`低位->高位`存储的。
+
+![image-20231113094143025](images/image-20231113094143025.png)
+
+**零存零取**
+
+~~~sh
+127.0.0.1:6379> setbit w 1 1
+(integer) 0
+127.0.0.1:6379> setbit w 2 1
+(integer) 0
+127.0.0.1:6379> setbit w 4 1
+(integer) 0
+127.0.0.1:6379> getbit w 1 # 获取某个具体位置的值 0/1
+(integer) 1
+127.0.0.1:6379> getbit w 2
+(integer) 1
+127.0.0.1:6379> getbit w 4
+(integer) 1
+127.0.0.1:6379> getbit w 5
+(integer) 0
+~~~
+
+**整存零取**
+
+~~~sh
+127.0.0.1:6379> set w h # 整存
+(integer) 0
+127.0.0.1:6379> getbit w 1
+(integer) 1
+127.0.0.1:6379> getbit w 2
+(integer) 1
+127.0.0.1:6379> getbit w 4
+(integer) 1
+127.0.0.1:6379> getbit w 5
+(integer) 0
+~~~
+
+如果对应位的字节是不可打印字符，redis-cli 会显示该字符的 16 进制形式
+
+~~~sh
+127.0.0.1:6379> setbit x 0 1
+(integer) 0
+127.0.0.1:6379> setbit x 1 1
+(integer) 0
+127.0.0.1:6379> get x
+"\xc0"
+~~~
+
+**统计和查找**
+
+bitcount 用来统计指定位置范围内 1 的个数，bitpos 用来查找指定范围内出现的第一个 0 或 1。
+
+遗憾的是， start 和 end 参数是字节索引，也就是说`指定的位范围必须是 8 的倍数`，而不能任意指定。
+
+```sh
+127.0.0.1:6379> set w hello
+OK
+127.0.0.1:6379> bitcount w
+(integer) 21
+127.0.0.1:6379> bitcount w 0 0 # 第一个字符中 1 的位数
+(integer) 3
+127.0.0.1:6379> bitcount w 0 1 # 前两个字符中 1 的位数
+(integer) 7
+127.0.0.1:6379> bitpos w 0 # 第一个 0 位
+(integer) 0
+127.0.0.1:6379> bitpos w 1 # 第一个 1 位
+(integer) 1
+127.0.0.1:6379> bitpos w 1 1 1 # 从第二个字符算起，第一个 1 位
+(integer) 9
+127.0.0.1:6379> bitpos w 1 2 2 # 从第三个字符算起，第一个 1 位
+(integer) 17
+```
+
+**读取/设置多位**
+
+~~~sh
+127.0.0.1:6379> set w hello
+OK
+127.0.0.1:6379> bitfield w get u4 0 # 从第一个位开始取 4 个位，结果是无符号数 (u)
+(integer) 6
+127.0.0.1:6379> bitfield w get u3 2 # 从第三个位开始取 3 个位，结果是无符号数 (u)
+(integer) 5
+127.0.0.1:6379> bitfield w get i4 0 # 从第一个位开始取 4 个位，结果是有符号数 (i)
+1) (integer) 6
+127.0.0.1:6379> bitfield w get i3 2 # 从第三个位开始取 3 个位，结果是有符号数 (i)
+1) (integer) -3
+
+127.0.0.1:6379> bitfield w get u4 0 get u3 2 get i4 0 get i3 2
+1) (integer) 6
+2) (integer) 5
+3) (integer) 6
+4) (integer) -3
+
+127.0.0.1:6379> bitfield w set u8 8 97 # 从第 8 个位开始，将接下来的 8 个位用无符号数 97 替换
+1) (integer) 101
+127.0.0.1:6379> get w
+"hallo"
+~~~
+
+## HyperLogLog
+
+> 用来统计数量，例如统计网站的UV。
+>
+> 实现原理比较复杂，涉及数学和概率论！！！
+
+### 实战
+
+~~~sh
+127.0.0.1:6379> pfadd codehole user1
+(integer) 1
+127.0.0.1:6379> pfcount codehole
+(integer) 1
+127.0.0.1:6379> pfadd codehole user2
+(integer) 1
+127.0.0.1:6379> pfcount codehole
+(integer) 2
+127.0.0.1:6379> pfadd codehole user3
+(integer) 1
+127.0.0.1:6379> pfcount codehole
+(integer) 3
+127.0.0.1:6379> pfadd codehole user4
+(integer) 1
+127.0.0.1:6379> pfcount codehole
+(integer) 4
+127.0.0.1:6379> pfadd codehole user5
+(integer) 1
+127.0.0.1:6379> pfcount codehole
+(integer) 5
+127.0.0.1:6379> pfadd codehole user6
+(integer) 1
+127.0.0.1:6379> pfcount codehole
+(integer) 6
+127.0.0.1:6379> pfadd codehole user7 user8 user9 user10
+(integer) 1
+127.0.0.1:6379> pfcount codehole
+(integer) 10
+~~~
+
+**pfmerge 适合什么场合用？**
+
+用于将多个 pf 计数值累加在一起形成一个新的 pf 值。比如在网站中我们有两个内容差不多的页面，运营说需要这两个页面的数据进行合并。其中页面的 UV 访问量也需要合并，那这个时候 pfmerge 就可以派上用场了。
+
+# 布隆过滤器
+
+> 创建布隆时两个参数：初始大小、误判率。
+>
+> 存在误判：存在有可能不存在，不存在一定不存在。
+
+原理：多hash
+
+![image-20231113134541354](images/image-20231113134541354.png)
+
+## 空间占用估计
+
+布隆过滤器有两个参数，第一个是预计元素的数量 n，第二个是错误率 f。公式根据这两个输入得到两个输出，第一个输出是位数组的长度 l，也就是需要的存储空间大小 (bit)，第二个输出是 hash 函数的最佳数量 k。hash 函数的数量也会直接影响到错误率，最佳的数量会有最低的错误率。
+
+~~~sh
+k=0.7*(l/n) # 约等于
+
+f=0.6185^(l/n) # ^ 表示次方计算，也就是 math.pow
+~~~
+
+从公式中可以看出
+
+ 1、位数组相对越长 (l/n)，错误率 f 越低，这个和直观上理解是一致的
+
+ 2、位数组相对越长 (l/n)，hash 函数需要的最佳数量也越多，影响计算效率
+
+ 3、当一个元素平均需要 1 个字节 (8bit) 的指纹空间时 (l/n=8)，错误率大约为 2%
+
+ 4、错误率为 10%，一个元素需要的平均指纹空间为 4.792 个 bit，大约为 5bit
+
+ 5、错误率为 1%，一个元素需要的平均指纹空间为 9.585 个 bit，大约为 10bit
+
+ 6、错误率为 0.1%，一个元素需要的平均指纹空间为 14.377 个 bit，大约为 15bit
+
+## 实际元素超出时，误判率会怎样变化
+
+当实际元素超出预计元素时，错误率会有多大变化，它会急剧上升么，还是平缓地上升，这就需要另外一个公式，引入参数 t 表示实际元素和预计元素的倍数 t
+
+~~~sh
+f=(1-0.5^t)^k # 极限近似，k 是 hash 函数的最佳数量
+~~~
+
+当 t 增大时，错误率，f 也会跟着增大，分别选择错误率为 10%,1%,0.1% 的 k 值，画出它的曲线进行直观观察。
+
+![image-20231113153146345](images/image-20231113153146345.png)
+
+# 限流
+
+> 需求：[a,b]时间窗口内，最多有n个请求。
+
+## 简单限流
+
+![image-20231113153358090](images/image-20231113153358090.png)
+
+~~~java
+public class SimpleRateLimiter {
+ private Jedis jedis;
+ public SimpleRateLimiter(Jedis jedis) {
+ 	this.jedis = jedis;
+ }
+ public boolean isActionAllowed(String userId, String actionKey, int period, int maxCount) {
+     String key = String.format("hist:%s:%s", userId, actionKey);
+     long nowTs = System.currentTimeMillis();
+     Pipeline pipe = jedis.pipelined();
+     pipe.multi();
+     pipe.zadd(key, nowTs, "" + nowTs);
+     pipe.zremrangeByScore(key, 0, nowTs - period * 1000);
+     Response<Long> count = pipe.zcard(key);
+     pipe.expire(key, period + 1);
+     pipe.exec();
+     pipe.close();
+     return count.get() <= maxCount;
+ }
+ public static void main(String[] args) {
+     Jedis jedis = new Jedis();
+     SimpleRateLimiter limiter = new SimpleRateLimiter(jedis);
+     for(int i=0;i<20;i++) {
+        System.out.println(limiter.isActionAllowed("laoqian", "reply", 60, 5));
+     }
+ }
+}
+~~~
+
+> 整体思路：每一个行为到来时，都维护一次时间窗口。将时间窗口外的记录全部清理掉，只保留窗口内的记录。zset 集合中只有 score 值非常重要，value 值没有特别的意义，只需要保证它是唯一的就可以了。
+>
+> 因为这几个连续的 Redis 操作都是针对同一个 key 的，使用 pipeline 可以显著提升Redis 存取效率。但这种方案也有缺点，因为它要记录时间窗口内所有的行为记录，如果这个量很大，比如限定 60s 内操作不得超过 100w 次这样的参数，它是不适合做这样的限流的，因为会消耗大量的存储空间。
+
+## 漏斗限流
+
+~~~java
+public class FunnelRateLimiter {
+    static class Funnel {
+        int capacity;
+        float leakingRate;
+        int leftQuota;
+        long leakingTs;
+        public Funnel(int capacity, float leakingRate) {
+            this.capacity = capacity;
+            this.leakingRate = leakingRate;
+            this.leftQuota = capacity;
+            this.leakingTs = System.currentTimeMillis();
+        }
+        void makeSpace() {
+            long nowTs = System.currentTimeMillis();
+            long deltaTs = nowTs - leakingTs;
+            int deltaQuota = (int) (deltaTs * leakingRate);
+            if (deltaQuota < 0) { // 间隔时间太长，整数数字过大溢出
+                this.leftQuota = capacity;
+                this.leakingTs = nowTs;
+                return;
+            }
+            if (deltaQuota < 1) { // 腾出空间太小，最小单位是 1
+                return;
+            }
+            this.leftQuota += deltaQuota;
+            this.leakingTs = nowTs;
+            if (this.leftQuota > this.capacity) {
+                this.leftQuota = this.capacity;
+            }
+        }
+        boolean watering(int quota) {
+            makeSpace();
+            if (this.leftQuota >= quota) {
+                this.leftQuota -= quota;
+                return true;
+            }
+            return false;
+        }
+    }
+    private Map<String, Funnel> funnels = new HashMap<>();
+    public boolean isActionAllowed(String userId, String actionKey, int capacity, float leakingRate) {
+        String key = String.format("%s:%s", userId, actionKey);
+        Funnel funnel = funnels.get(key);
+        if (funnel == null) {
+            funnel = new Funnel(capacity, leakingRate);
+            Redis 深度历险：核心原理与应用实践 | 钱文品 著
+            第 74 页 共 226 页
+            funnels.put(key, funnel);
+        }
+        return funnel.watering(1); // 需要 1 个 quota
+    }
+}
+~~~
+
+> Funnel 对象的 make_space 方法是漏斗算法的核心，其在每次灌水前都会被调用以触发漏水，给漏斗腾出空间来。能腾出多少空间取决于过去了多久以及流水的速率。Funnel 对象占据的空间大小不再和行为的频率成正比，它的空间占用是一个常量。
+>
+> 问题来了，分布式的漏斗算法该如何实现？能不能使用 Redis 的基础数据结构来搞定？
+>
+> 我们观察 Funnel 对象的几个字段，我们发现可以将 Funnel 对象的内容按字段存储到一个 hash 结构中，灌水的时候将 hash 结构的字段取出来进行逻辑运算后，再将新值回填到hash 结构中就完成了一次行为频度的检测。
+>
+> 但是有个问题，我们无法保证整个过程的原子性。从 hash 结构中取值，然后在内存里运算，再回填到 hash 结构，这三个过程无法原子化，意味着需要进行适当的加锁控制。而一旦加锁，就意味着会有加锁失败，加锁失败就需要选择重试或者放弃。如果重试的话，就会导致性能下降。如果放弃的话，就会影响用户体验。同时，代码的复杂度也跟着升高很多。这真是个艰难的选择，我们该如何解决这个问题呢？Redis-Cell 救星来了。
+
+### Redis-Cell 
+
+> Redis 4.0 提供了一个限流 Redis 模块，它叫 redis-cell。该模块也使用了漏斗算法，并提供了原子的限流指令。
+
+![image-20231117091218687](images/image-20231117091218687.png)
+
+上面这个指令的意思是允许「用户老钱回复行为」的频率为每 60s 最多 30 次(漏水速率)，漏斗的初始容量为 15，也就是说一开始可以连续回复 15 个帖子，然后才开始受漏水速率的影响。我们看到这个指令中漏水速率变成了 2 个参数，替代了之前的单个浮点数。用两个参数相除的结果来表达漏水速率相对单个浮点数要更加直观一些。
+
+~~~sh
+\> cl.throttle laoqian:reply 15 30 60
+
+1) (integer) 0 # 0 表示允许，1 表示拒绝
+
+2) (integer) 15 # 漏斗容量 capacity
+
+3) (integer) 14 # 漏斗剩余空间 left_quota
+
+4) (integer) -1 # 如果拒绝了，需要多长时间后再试(漏斗有空间了，单位秒)
+
+5) (integer) 2 # 多长时间后，漏斗完全空出来(left_quota==capacity，单位秒)
+~~~
+
+在执行限流指令时，如果被拒绝了，就需要丢弃或重试。cl.throttle 指令考虑的非常周到，连重试时间都帮你算好了，直接取返回结果数组的第四个值进行 sleep 即可，如果不想阻塞线程，也可以异步定时任务来重试。
 
 # redis多线程配置
 
