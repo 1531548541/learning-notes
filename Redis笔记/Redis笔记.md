@@ -269,14 +269,44 @@ OK
 
 
 
-## ziplist
+## 压缩数据结构
+
+### ziplist
 
 > 压缩列表是 List 、hash、 sorted Set 三种数据类型底层实现之一。
 >
 > 当一个列表只有少量数据的时候，并且每个列表项要么就是小整数值，要么就是长度比较短的字符串，那么 Redis 就会使用压缩列表来做列表键的底层实现。
 >
 
-![image-20220304174441024](images/image-20220304174441024.png)
+![image-20231120145608039](images/image-20231120145608039.png)
+
+
+
+### intset
+
+> Redis 的 intset 是一个紧凑的整数数组结构，它用于存放元素都是整数的并且元素个数较少的 set 集合。
+>
+> 如果整数可以用 uint16 表示，那么 intset 的元素就是 16 位的数组，如果新加入的整数超过了 uint16 的表示范围，那么就使用 uint32 表示，如果新加入的元素超过了 uint32 的表示范围，那么就使用 uint64 表示，Redis 支持 set 集合动态从 uint16 升级到 uint32，再升级到 uint64。
+
+![image-20231120150206802](images/image-20231120150206802.png)
+
+### 存储界限
+
+当集合对象的元素不断增加，或者某个 value 值过大，这种小对象存储也会被升级为标准结构。Redis 规定在小对象存储结构的限制条件如下：
+
+hash-max-zipmap-entries 512 # hash 的元素个数超过 512 就必须用标准结构存储
+
+hash-max-zipmap-value 64 # hash 的任意元素的 key/value 的长度超过 64 就必须用标准结构存储
+
+list-max-ziplist-entries 512 # list 的元素个数超过 512 就必须用标准结构存储
+
+list-max-ziplist-value 64 # list 的任意元素的长度超过 64 就必须用标准结构存储
+
+zset-max-ziplist-entries 128 # zset 的元素个数超过 128 就必须用标准结构存储
+
+zset-max-ziplist-value 64 # zset 的任意元素的长度超过 64 就必须用标准结构存储
+
+set-max-intset-entries 512 # set 的整数元素个数超过 512 就必须用标准结构存储
 
 ## quicklist
 
@@ -1056,7 +1086,7 @@ Redis 同样也会为每个客户端套接字关联一个响应队列。Redis �
 
 服务器处理要响应 IO 事件外，还要处理其它事情。比如定时任务就是非常重要的一件事。如果线程阻塞在 select 系统调用上，定时任务将无法得到准时调度。那 Redis 是如何解决这个问题的呢？Redis 的定时任务会记录在一个称为最小堆的数据结构中。这个堆中，最快要执行的任务排在堆的最上方。在每个循环周期，Redis 都会将最小堆里面已经到点的任务立即进行处理。处理完毕后，将最快要执行的任务还需要的时间记录下来，这个时间就是 select 系统调用的 timeout 参数。因为 Redis 知道未来 timeout 时间内，没有其它定时任务需要处理，所以可以安心睡眠 timeout 的时间。Nginx 和 Node 的事件处理原理和 Redis 也是类似的。
 
-## 通信协议
+# 通信协议
 
 > RESP(Redis Serialization Protocol)
 >
@@ -1226,6 +1256,86 @@ buffer。
 所以对于 value = redis.get(key)这样一个简单的请求来说，write 操作几乎没有耗时，直接写到发送缓冲就返回，而 read 就会比较耗时了，因为它要等待消息经过网络路由到目标机器处理后的响应消息,再回送到当前的内核读缓冲才可以返回。这才是一个网络来回的真正开销。
 
 而对于管道来说，连续的 write 操作根本就没有耗时，之后第一个 read 操作会等待一个网络的来回开销，然后所有的响应消息就都已经回送到内核的读缓冲了，后续的 read 操作直接就可以从缓冲拿到结果，瞬间就返回了。
+
+# 事务
+
+> redis事务与传统数据库事务有区别：`仅部分回滚（不满足原子性）`
+
+## 不满足原子性
+
+~~~sh
+> multi
+OK
+> set books iamastring
+QUEUED
+> incr books
+QUEUED
+> set poorman iamdesperate
+QUEUED
+> exec
+1) OK
+2) (error) ERR value is not an integer or out of range
+3) OK
+> get books
+"iamastring"
+> get poorman
+"iamdesperate
+~~~
+
+## discard
+
+用于丢弃事务缓存队列中的所有指令，在 exec 执行之前。
+
+~~~sh
+> get books
+(nil)
+> multi
+OK
+> incr books
+QUEUED
+> incr books
+QUEUED
+> discard
+OK
+> get books
+(nil)
+~~~
+
+## Watch(乐观锁)
+
+底层伪代码
+
+~~~c
+while True:
+ do_watch()
+ commands()
+ multi()
+ send_commands()
+ try:
+ exec()
+ break
+ except WatchError:
+ continue
+~~~
+
+具体使用
+
+~~~sh
+> watch books
+OK
+> incr books # 被修改了
+(integer) 1
+> multi
+OK
+> incr books
+QUEUED
+> exec # 事务执行失败
+(nil)
+~~~
+
+
+
+watch 会在事务开始之前盯住 1 个或多个关键变量，当事务执行时，也就是服务器收到了 exec 指令要顺序执行缓存的事务队列时，Redis 会检查关键变量自 watch 之后，是否被修改了 (包括当前事务所在的客户端)。如果关键变量被人动过了，exec 指令就会返回 null 回复告知客户端事务执行失败，这个时候客户端一般会选择重试。不过也有些语言 (jedis) 不会抛出异常，而是通过在 exec 方法里返回一个 null，这样客户端需要检查一下返回结果是否为 null 来确定事务是否执行失败。
 
 # 数据过期清理策略
 
