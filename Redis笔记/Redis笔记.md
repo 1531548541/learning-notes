@@ -904,7 +904,7 @@ Redis 还提供了根据坐标值来查询附近的元素，这个指令更加�
 
 所以，这里建议 Geo 的数据使用单独的 Redis 实例部署，不使用集群环境。如果数据量过亿甚至更大，就需要对 Geo 数据进行拆分，按国家拆分、按省拆分，按市拆分，在人口特大城市甚至可以按区拆分。这样就可以显著降低单个 zset 集合的大小。
 
-# object
+# redisObject（V6.2为例）
 
 ~~~c
 typeof struct redisObject {
@@ -946,6 +946,126 @@ OK
 ![image-20231206155812435](images/image-20231206155812435.png)
 
 ![image-20231206155827524](images/image-20231206155827524.png)
+
+## string
+
+string对象的编码可以是int、raw、embstr。
+
+### int
+
+字符串对象保存的是整数值，并且整数值可以用long表示。
+
+![image-20231207150718527](images/image-20231207150718527.png)
+
+### embstr
+
+字符串对象保存的是字符串值、`浮点数`，且长度<=32字节。
+
+![image-20231207151017954](images/image-20231207151017954.png)
+
+### raw
+
+字符串对象保存的是字符串值，且长度>32字节。
+
+![image-20231207150827164](images/image-20231207150827164.png)
+
+`embstr VS raw`
+
+都使用redisObject和sdshdr结构来表示字符串对象，但raw编码会调用两次内存分配函数分别创建redisObject和sdshdr。而embstr仅调用一次来分配一块连续的空间。
+
+![image-20231207151452775](images/image-20231207151452775.png)
+
+因此embstr的优势：
+
+1. 内存分配次数少一次。
+2. 释放内存次数当然也少一次。
+3. 数据都保存在一块连续的内存中，能更好利用缓存带来的优势。
+
+### 转换
+
+不满足int、embstr、raw定义时会发生转换。
+
+Redis没有为embstr编码的字符串对象编写任何的修改程序（只读），因此只存在 int->raw、embstr->raw。
+
+## list
+
+列表对象的编码可以是ziplist和linkedlist。
+
+以下条件`任一不满足`时，ziplist->linkedlist：
+
+- 列表对象保存的所有字符串元素的长度都 <8字节（配置list-max-ziplist-size）。
+- 列表对象保存的元素数量 <512个（`TODO V3.0以后没有这项了貌似`）；
+
+### ziplist
+
+![image-20231207152547469](images/image-20231207152547469.png)
+
+### linkedlist
+
+![image-20231207152555318](images/image-20231207152555318.png)
+
+其中StringObject简化了，实际上是：
+
+![image-20231207152720839](images/image-20231207152720839.png)
+
+## hash
+
+哈希对象的编码可以是ziplist和hashtable。
+
+默认配置：
+
+以下条件`任一不满足`时，ziplist->hashtable：
+
+- 哈希对象保存的所有kv对的k和v的字符串元素的长度都 <64字节（配置hash-max-ziplist-value）。
+- 哈希对象保存的kv对数量 <512个（配置hash-max-ziplist-entries）；
+
+### ziplist
+
+头插法
+
+![image-20231207153506684](images/image-20231207153506684.png)
+
+![image-20231207153516716](images/image-20231207153516716.png)
+
+### hashtable
+
+![image-20231207153623052](images/image-20231207153623052.png)
+
+## set
+
+集合对象的编码可以是intset和hashtable。
+
+以下条件`任一不满足`时，intset->hashtable：
+
+- 集合对象保存的都是整数值。
+- 集合对象保存的元素数量 <512个（配置set-max-intset-entries）；
+
+### intset
+
+![image-20231207154145298](images/image-20231207154145298.png)
+
+### hashtable
+
+![image-20231207154157381](images/image-20231207154157381.png)
+
+## zset
+
+有序集合对象的编码可以是ziplist和skiplist。
+
+以下条件`任一不满足`时，ziplist->skiplist：
+
+- 有序集合对象保存的所有元素长度都 <64字节（配置zset-max-ziplist-value）。
+- 有序集合对象保存的元素数量 <128个（配置zset-max-ziplist-entries）；
+
+### ziplist
+
+![image-20231207154820892](images/image-20231207154820892.png)
+
+![image-20231207154832108](images/image-20231207154832108.png)
+
+### skiplist
+
+![image-20231207155001778](images/image-20231207155001778.png)
 
 # 布隆过滤器
 
