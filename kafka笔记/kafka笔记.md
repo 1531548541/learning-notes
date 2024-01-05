@@ -1810,3 +1810,45 @@ retry.backoff.ms:20000
 
    当然，消息的压缩和解压缩需要消耗一定的CPU资源，用户需要均衡好CPU和带宽的关系。
 
+# 实战
+
+## 发送大消息
+
+> kafka默认只能发送最大1MB的信息，想发送大消息就需要修改配置。（1048576=1MB）
+>
+> 1. 修改producer.properties
+>
+>    max.request.size=10485760
+>
+>    此处虽然源码读的这里的配置，但是实际发现nifi使用publishKafka，只需要修改Max Request Size，这里不打开配置也不影响，TODO 研究一下，如果springboot整合kafka会不会要修改producer.properties。
+>
+> 2. 修改server.properties
+>
+>    message.max.bytes=10485760
+>
+>    replica.fetch.max.bytes=10485760
+>
+> 3. 修改topic配置（`topic事先存在时，需要做这步`）
+>
+>    高版本：
+>
+>    - 【修改配置】
+>
+>      ./bin/kafka-topics.sh --bootstrap-server localhost:9092 --topic aa --alter --add-config max.message.bytes=10485760
+>
+>    - 【查看是否生效】
+>
+>      ./bin/kafka-topics.sh --bootstrap-server localhost:9092 --topic aa --describe
+>
+>    低版本：
+>
+>    - 【修改配置】
+>
+>      ./bin/kafka-topics.sh --zookeeper localhost:2181 --entity-name aa --entity-type topics --alter --add-config max.message.bytes=10485760
+>
+>    - 【查看是否生效】
+>
+>      ./bin/kafka-topics.sh --zookeeper localhost:2181 --entity-name aa --entity-type topics --describe
+>
+> ![kafka大消息配置](images/kafka大消息配置.png)
+
