@@ -567,19 +567,14 @@ docker run -p 80:80 --name nginx \
 ### 1、单机安装
 
 ```sh
+# 创建挂载目录
+mkdir -p /opt/docker_app/mysql/log /opt/docker_app/mysql/data /opt/docker_app/mysql/conf
 # 5.7版本
 docker run -p 3306:3306 --name mysql57-app \
--v /app/mysql/log:/var/log/mysql \
--v /app/mysql/data:/var/lib/mysql \
--v /app/mysql/conf:/etc/mysql/conf.d \
+-v /opt/docker_app/mysql/log:/var/log/mysql \
+-v /opt/docker_app/mysql/data:/var/lib/mysql \
+-v /opt/docker_app/mysql/conf:/etc/mysql \
 -e MYSQL_ROOT_PASSWORD=123456 \
--d mysql:5.7
-
-docker run -p 4408:3306 --name mysql57-app \
--v /usr/local/mysql/log:/var/log/mysql \
--v /usr/local/mysql/data:/var/lib/mysql \
--v /usr/local/mysql/conf:/etc/mysql/conf.d \
--e MYSQL_ROOT_PASSWORD=xUeMysqlPass \
 -d mysql:5.7
 
 #8.x版本,引入了 secure-file-priv 机制，磁盘挂载将没有权限读写data数据，所以需要将权限透传，
