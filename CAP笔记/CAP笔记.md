@@ -56,7 +56,9 @@ auto-increment-offset = 1
 auto-increment-increment = 2
 slave-skip-errors = all
 replicate-do-db = test_db
-replicate-ignore-db = mysql,information-schema,performance-schema
+replicate-ignore-db = mysql
+replicate-ignore-db = information-schema
+replicate-ignore-db = performance-schema
 ~~~
 
 (2)master_back节点配置
@@ -79,7 +81,9 @@ auto-increment-increment = 2
 auto-increment-offset = 1
 slave-skip-errors = all
 binlog-do-db = test_db
-binlog-ignore-db = mysql,information_schema,performance_schema
+binlog-ignore-db = mysql
+binlog-ignore-db = information_schema
+binlog-ignore-db = performance_schema
 ~~~
 
 #### 2、主从节点授权
