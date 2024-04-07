@@ -128,13 +128,7 @@ mysql: [Warning] Using a password on the command line interface can be insecure.
 ......
 Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
 
-mysql> change master to 
-    -> master_host='192.168.222.128',            #128服务器mysql ip
-    -> master_port=3306,                         #128服务器mysql端口
-    -> master_user='slavebak',                   #128服务器mysql从库同步用户
-    -> master_password='slavebak',               #128服务器mysql从库同步用户密码
-    -> master_log_file='mysql-bin.000002',       #前面记录的128服务mysql file值
-    -> master_log_pos=1287;                      #前面记录的128服务mysql psition值
+mysql> change master to master_host='192.168.222.128',master_port=3306,master_user='slavebak',master_password='slavebak',master_log_file='mysql-bin.000002',master_log_pos=1287;
 Query OK, 0 rows affected, 2 warnings (0.02 sec)
 
 mysql> start slave;            #启动从库配置
@@ -175,13 +169,7 @@ mysql: [Warning] Using a password on the command line interface can be insecure.
 ......
 Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
 
-mysql> change master to 
-    -> master_host='192.168.222.129',            #129服务器mysql ip
-    -> master_port=3306,                         #129服务器mysql端口
-    -> master_user='slavebak',                   #129服务器mysql从库同步用户
-    -> master_password='slavebak',               #129服务器mysql从库同步用户密码
-    -> master_log_file='mysql-bin.000002',       #前面记录的129服务mysql file值
-    -> master_log_pos=848;                       #前面记录的129服务mysql psition值
+mysql> change master to master_host='192.168.222.129',master_port=3306,master_user='slavebak',master_password='slavebak',master_log_file='mysql-bin.000002',master_log_pos=848;
 Query OK, 0 rows affected, 2 warnings (0.02 sec)
 
 mysql> start slave;            #启动从库配置
