@@ -1135,3 +1135,201 @@ GET /_cluster/health
 
 >
 
+# ES安全之X-Pack
+
+## 1、什么是Xpack
+
+> X-Pack是ES扩展功能，提供安全性，警报，监视，报告，机器学习和许多其他功能。 ES7.0+之后，默认情况下，当安装ElasticSearch时，会安装X-Pack，无需单独再安装。
+
+基础版本安全功能列表如下：
+
+![在这里插入图片描述](images/6cd378458d1747af98c34dd965cea4bd.png)
+
+## 2、相关安全配置介绍
+
+这里挑一些比较重要常见的配置项介绍，完整的配置介绍可以查看官方文档
+
+### 2.1、xpack.security.enabled
+
+默认为true，启用节点上ES的XPACK安全功能，相当于总开关
+
+### 2.2、xpack.security.http.ssl
+
+这个是用来开启https的，以及对应的设置，整体配置项如下：
+
+~~~yaml
+xpack.security.http.ssl:
+  enabled: false 【开启还是关闭】
+  verification_mode: certificate【如下】
+   【full：它验证所提供的证书是否由受信任的权威机构(CA)签名，并验证服务器的主机名(或IP地址)是否与证书中识别的名称匹配。】
+   【certificate：它验证所提供的证书是否由受信任的机构(CA)签名，但不执行任何主机名验证。】
+   【none：它不执行服务器证书的验证。】
+  truststore.path: certs/elastic-certificates.p12 【信任存储库文件的存放位置】
+  keystore.path: certs/elastic-certificates.p12【密钥存储库文件的存放位置】
+~~~
+
+### 2.3、xpack.security.transport.ssl
+
+这个是传输层的认证设置，整体配置项如下：
+
+~~~yaml
+xpack.security.transport.ssl:
+  enabled: true【开启还是关闭】
+  verification_mode: certificate【如下】
+   【full：它验证所提供的证书是否由受信任的权威机构(CA)签名，并验证服务器的主机名(或IP地址)是否与证书中识别的名称匹配。】
+   【certificate：它验证所提供的证书是否由受信任的机构(CA)签名，但不执行任何主机名验证。】
+   【none：它不执行服务器证书的验证。】
+  keystore.path: certs/elastic-certificates.p12【信任存储库文件的存放位置】
+  truststore.path: certs/elastic-certificates.p12【密钥存储库文件的存放位置】
+~~~
+
+## 3、ES集群认证配置
+
+命令操作都是在ES安装根目录下执行的
+
+### 3.1、创建证书
+
+#### a、创建一个证书颁发机构
+
+提示命名文件：直接回车，默认文件名elastic-stack-ca.p12文件
+提示输入密码：可以直接回车，也可以输入密码进行设置
+
+~~~sh
+./bin/elasticsearch-certutil ca
+~~~
+
+#### b、为节点生成证书和私钥
+
+提示命名文件，直接回车，默认文件名elastic-certificates.p12文件
+提示输入密码：可以直接回车，也可以输入密码进行设置
+
+~~~sh
+./bin/elasticsearch-certutil cert --ca elastic-stack-ca.p12
+~~~
+
+#### c、config目录下创建下certs目录
+
+~~~sh
+makdir config/certs 
+~~~
+
+#### d、将文件可拷贝到certs目录下
+
+~~~sh
+mv elastic-certificates.p12 config/certs/
+~~~
+
+### 3.2、给keystore和truststore设置密码
+
+注解：
+keystore可以看成一个放key的库，key就是公钥，私钥，数字签名等组成的一个信息。
+truststore是放信任的证书的一个store
+truststore和keystore的性质是一样的，都是存放key的一个仓库，区别在于，truststore里存放的是只包含公钥的数字证书，代表了可以信任的证书，而keystore是包含私钥的。
+
+如果在创建证书的过程中加了密码，需要输入这个密码。每个节点都需要
+
+~~~sh
+./bin/elasticsearch-keystore add xpack.security.transport.ssl.keystore.secure_password
+
+./bin/elasticsearch-keystore add xpack.security.transport.ssl.truststore.secure_password
+
+./bin/elasticsearch-keystore add xpack.security.http.ssl.keystore.secure_password
+
+./bin/elasticsearch-keystore add xpack.security.http.ssl.truststore.secure_password
+~~~
+
+这样就会在config目录下keystore文件了
+
+### 3.3、修改配置文件并重启
+
+配置文件中加入以下配置，然后重启
+
+~~~sh
+xpack.security.enabled: true
+
+xpack.security.http.ssl:
+  enabled: false
+  verification_mode: certificate
+  truststore.path: certs/elastic-certificates.p12
+  keystore.path: certs/elastic-certificates.p12
+
+xpack.security.transport.ssl:
+  enabled: true
+  verification_mode: certificate
+  keystore.path: certs/elastic-certificates.p12
+  truststore.path: certs/elastic-certificates.p12
+~~~
+
+### 3.4、创建用户密码
+
+集群中的节点都按照上面的方式完成配置并启动后，就可以设置账号密码了
+
+#### a、自动创建密码
+
+~~~sh
+./bin/elasticsearch-setup-passwords auto
+~~~
+
+#### b、手动输入密码
+
+~~~sh
+./bin/elasticsearch-setup-passwords interactive
+~~~
+
+#### c、重置用户密码（随机密码）
+
+~~~sh
+./bin/elasticsearch-reset-password -u elastic
+~~~
+
+#### d、重置用户密码（指定密码）
+
+~~~sh
+./bin/elasticsearch-reset-password -u elastic -i <password>
+~~~
+
+## 4、ES单机认证配置
+
+### 1.修改配置
+
+需要在配置文件中开启x-pack验证, 修改config目录下面的elasticsearch.yml文件，在里面添加如下内容,并重启es.
+
+~~~sh
+xpack.security.enabled: true
+xpack.license.self_generated.type: basic
+xpack.security.transport.ssl.enabled: true
+~~~
+
+### 2.设置密码
+
+进入es的安装根目录bin下，执行设置用户名和密码的命令,这里需要为4个用户分别设置密码，elastic, [kibana](https://so.csdn.net/so/search?q=kibana&spm=1001.2101.3001.7020), logstash_system,beats_system
+
+~~~sh
+./elasticsearch-setup-passwords interactive
+~~~
+
+## 5、认证验证场景
+
+### 5.1、浏览器访问验证
+
+这里说明一下：
+xpack.security.http.ssl的enable为true 就会是https，为false就是http，我这里是关掉了
+
+### 5.2、curl 认证
+
+当你执行curl去访问es api的时候也会提示需要进行认证
+
+
+但是带上账号密码就可以了
+
+### 5.3、kibana 认证
+
+kibana中配置ES中配置的kibana账号密码即可连接ES认证
+
+~~~sh
+elasticsearch.username: "kibana"
+elasticsearch.password: "XXX"
+elasticsearch.hosts: ["http://1.1.1.1:9200","http://2.2.2.2:9200","http://3.3.3.3:9200"]
+server.port: 5601
+~~~
+
