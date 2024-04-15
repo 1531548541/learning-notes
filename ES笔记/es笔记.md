@@ -1333,3 +1333,35 @@ elasticsearch.hosts: ["http://1.1.1.1:9200","http://2.2.2.2:9200","http://3.3.3.
 server.port: 5601
 ~~~
 
+## 中孚elasticsearch.yml
+
+~~~yaml
+cluster.name: zf-es
+node.name: node-1
+network.host: 0.0.0.0
+http.port: 9200
+transport.tcp.host: 8544
+discovery.seed_hosts: ["node128:9301"]
+cluster.initial_master_nodes: ["node128"]
+
+path.data: /opt/zfbdp/data/elasticsearch
+path.logs: /opt/zfbdp/logs/elasticsearch
+
+xpack.security.enabled: true
+xpack.security.http.ssl:
+  enabled: false
+  verification_mode: certificate
+  truststore.path: certs/elastic-certificates.p12
+  keystore.path: certs/elastic-certificates.p12
+xpack.security.transport.ssl:
+  enabled: true
+  verification_mode: certificate
+  keystore.path: certs/elastic-certificates.p12
+  truststore.path: certs/elastic-certificates.p12
+
+action.destructive_requires_name: true
+bootstrap.system_call_filter: false
+http.cors.allow-origin: "*"
+http.cors.enabled: true
+~~~
+
