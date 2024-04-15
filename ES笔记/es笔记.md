@@ -32,22 +32,22 @@ docker run --name=elasticsearch -p 9200:9200 -p 9300:9300 \
 -v esconfig:/usr/share/elasticsearch/config \
 -d elasticsearch:7.12.0
 
-#######################################
+####################我一般使用以下###################
 
-docker pull elasticsearch:7.4.2  存储和检索数据
-docker pull kibana:7.4.2 可视化检索数据   
+docker pull elasticsearch:7.4.2
+docker pull kibana:7.4.2
 
-mkdir -p /opt/docker/elasticsearch/{config,data,plugins} # 用来存放配置文件、数据、插件
-echo "http.host: 0.0.0.0" >/opt/docker/elasticsearch/config/elasticsearch.yml # 允许任何机器访问
-chmod -R 777 /opt/docker/elasticsearch/ ## 设置elasticsearch文件可读写权限
+mkdir -p /opt/docker_app/elasticsearch/{config,data,plugins} # 用来存放配置文件、数据、插件
+echo "http.host: 0.0.0.0" >/opt/docker_app/elasticsearch/config/elasticsearch.yml # 允许任何机器访问
+chmod -R 777 /opt/docker_app/elasticsearch/ ## 设置elasticsearch文件可读写权限
 
 # 启动es
 docker run --name elasticsearch -p 9200:9200 -p 9300:9300 \
 -e  "discovery.type=single-node" \
 -e ES_JAVA_OPTS="-Xms64m -Xmx512m" \
--v /opt/docker/elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml \
--v /opt/docker/elasticsearch/data:/usr/share/elasticsearch/data \
--v  /opt/docker/elasticsearch/plugins:/usr/share/elasticsearch/plugins \
+-v /opt/docker_app/elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml \
+-v /opt/docker_app/elasticsearch/data:/usr/share/elasticsearch/data \
+-v  /opt/docker_app/elasticsearch/plugins:/usr/share/elasticsearch/plugins \
 -d elasticsearch:7.4.2
 
 #以后再外面装好插件重启就可
@@ -67,7 +67,7 @@ docker run --name kibana -e ELASTICSEARCH_HOSTS=http://192.168.200.128:9200 -p 5
 
 # ES实现原理
 
-![image-20220809103314866](C:\Users\Administrator\Desktop\learning-notes\ES笔记\images\image-20220809103314866.png)
+![image-20220809103314866](images\image-20220809103314866.png)
 
 >Lucene将上面三列分别作为词典文件、频率文件、位置文件保存。其中词典文件不仅保存了每个关键词，还保留了指向频率文件和位置文件的指针，通过指针即可找到对应文件信息。
 >
@@ -1219,14 +1219,14 @@ makdir config/certs
 mv elastic-certificates.p12 config/certs/
 ~~~
 
-### 3.2、给keystore和truststore设置密码
+### 3.2、给keystore和truststore设置密码(可选)
 
 注解：
 keystore可以看成一个放key的库，key就是公钥，私钥，数字签名等组成的一个信息。
 truststore是放信任的证书的一个store
 truststore和keystore的性质是一样的，都是存放key的一个仓库，区别在于，truststore里存放的是只包含公钥的数字证书，代表了可以信任的证书，而keystore是包含私钥的。
 
-如果在创建证书的过程中加了密码，需要输入这个密码。每个节点都需要
+如果在创建证书的过程中加了密码，需要输入这个密码（每个节点都需要）。
 
 ~~~sh
 ./bin/elasticsearch-keystore add xpack.security.transport.ssl.keystore.secure_password
@@ -1260,29 +1260,29 @@ xpack.security.transport.ssl:
   truststore.path: certs/elastic-certificates.p12
 ~~~
 
+`注意：需要设置elastic-certificates.p12文件权限，否则报错。`
+
+chmod 777 -R certs/
+
+![image-20240415161152727](images/image-20240415161152727.png)
+
 ### 3.4、创建用户密码
 
-集群中的节点都按照上面的方式完成配置并启动后，就可以设置账号密码了
+把elastic-certificates.p12文件复制到其他节点certs目录下，就可以设置账号密码了。在其中一个节点设置密码即可，设置完之后，数据会自动同步到其他节点。
 
-#### a、自动创建密码
-
-~~~sh
-./bin/elasticsearch-setup-passwords auto
-~~~
-
-#### b、手动输入密码
+#### a、手动输入密码
 
 ~~~sh
 ./bin/elasticsearch-setup-passwords interactive
 ~~~
 
-#### c、重置用户密码（随机密码）
+#### b、重置用户密码（随机密码）
 
 ~~~sh
 ./bin/elasticsearch-reset-password -u elastic
 ~~~
 
-#### d、重置用户密码（指定密码）
+#### c、重置用户密码（指定密码）
 
 ~~~sh
 ./bin/elasticsearch-reset-password -u elastic -i <password>
@@ -1327,7 +1327,7 @@ xpack.security.http.ssl的enable为true 就会是https，为false就是http，�
 kibana中配置ES中配置的kibana账号密码即可连接ES认证
 
 ~~~sh
-elasticsearch.username: "kibana"
+elasticsearch.username: "elastic"
 elasticsearch.password: "XXX"
 elasticsearch.hosts: ["http://1.1.1.1:9200","http://2.2.2.2:9200","http://3.3.3.3:9200"]
 server.port: 5601
