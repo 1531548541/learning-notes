@@ -1135,6 +1135,393 @@ GET /_cluster/health
 
 >
 
+# 聚合
+
+## 聚合分类
+
+### 分桶聚合
+
+> 类似group by
+
+| 子类名称          | 含义               |
+| ----------------- | ------------------ |
+| terms             | 分桶聚合结果       |
+| range             | 分区间聚合         |
+| histogram         | 间隔聚合           |
+| date histogram    | 时间间隔聚合       |
+| date range        | 时间范围聚合       |
+| composite组合聚合 | 支持聚合后分页     |
+| filters过滤聚合   | 满足过滤条件的聚合 |
+
+~~~json
+POST my_index_1101/_search
+{
+  "size": 0,
+  "aggs": {
+    "color_terms_agg": {
+      "terms": {
+        "field": "color"
+      }
+    }
+  }
+}
+
+####返回结果####
+{
+  "took" : 2,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 1,
+    "successful" : 1,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 8,
+      "relation" : "eq"
+    },
+    "max_score" : null,
+    "hits" : [ ]
+  },
+  "aggregations" : {
+    "color_terms_agg" : {
+      "doc_count_error_upper_bound" : 0,
+      "sum_other_doc_count" : 0,
+      "buckets" : [
+        {
+          "key" : "red",
+          "doc_count" : 4
+        },
+        {
+          "key" : "blue",
+          "doc_count" : 2
+        },
+        {
+          "key" : "green",
+          "doc_count" : 2
+        }
+      ]
+    }
+  }
+}
+
+~~~
+
+~~~json
+####聚合内嵌套聚合实现
+POST my_index_1103/_search
+{
+  "size": 0,
+  "aggs": {
+    "hole_terms_agg": {
+      "terms": {
+        "field": "has_hole"
+      },
+      "aggs": {
+        "color_terms": {
+          "terms": {
+            "field": "color"
+          }
+        }
+      }
+    }
+  }
+}
+
+##返回结果
+{
+  "took" : 4,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 1,
+    "successful" : 1,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 19,
+      "relation" : "eq"
+    },
+    "max_score" : null,
+    "hits" : [ ]
+  },
+  "aggregations" : {
+    "hole_terms_agg" : {
+      "doc_count_error_upper_bound" : 0,
+      "sum_other_doc_count" : 0,
+      "buckets" : [
+        {
+          "key" : "0",
+          "doc_count" : 10,
+          "color_terms" : {
+            "doc_count_error_upper_bound" : 0,
+            "sum_other_doc_count" : 0,
+            "buckets" : [
+              {
+                "key" : "green",
+                "doc_count" : 4
+              },
+              {
+                "key" : "blue",
+                "doc_count" : 2
+              },
+              {
+                "key" : "red",
+                "doc_count" : 2
+              },
+              {
+                "key" : "yellow",
+                "doc_count" : 2
+              }
+            ]
+          }
+        },
+        {
+          "key" : "1",
+          "doc_count" : 9,
+          "color_terms" : {
+            "doc_count_error_upper_bound" : 0,
+            "sum_other_doc_count" : 0,
+            "buckets" : [
+              {
+                "key" : "yellow",
+                "doc_count" : 4
+              },
+              {
+                "key" : "blue",
+                "doc_count" : 2
+              },
+              {
+                "key" : "red",
+                "doc_count" : 2
+              },
+              {
+                "key" : "green",
+                "doc_count" : 1
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
+~~~
+
+
+
+### 指标聚合
+
+> 即统计最大值、最小值、平均值等
+
+| 子类名称    | 含义                                  |
+| ----------- | ------------------------------------- |
+| avg         | 求平均值                              |
+| sum         | 求和                                  |
+| max         | 求最大值                              |
+| min         | 求最小值                              |
+| stats       | 求统计结果值（由max、min、avg等组成） |
+| top hits    | 求各外层桶的详情                      |
+| cardinality | 去重                                  |
+| value count | 计数                                  |
+
+~~~json
+####执行指标聚合统计最大值、最小值
+POST my_index_1102/_search
+{
+  "size": 0,
+  "aggs": {
+    "max_agg": {
+      "max": {
+        "field": "size"
+      }
+    },
+    "min_agg": {
+      "min": {
+        "field": "size"
+      }
+    },
+    "avg_agg": {
+      "avg": {
+        "field": "size"
+      }
+    }
+  }
+}
+
+###返回结果
+{
+  "took" : 22,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 1,
+    "successful" : 1,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 10,
+      "relation" : "eq"
+    },
+    "max_score" : null,
+    "hits" : [ ]
+  },
+  "aggregations" : {
+    "max_agg" : {
+      "value" : 9.0
+    },
+    "avg_agg" : {
+      "value" : 4.5
+    },
+    "min_agg" : {
+      "value" : 0.0
+    }
+  }
+}
+~~~
+
+```json
+####stats指标聚合统计
+POST my_index_1102/_search
+ {
+   "size": 0,
+   "aggs": {
+     "size_stats": {
+       "stats": {
+         "field": "size"
+       }
+     }
+   }
+ }
+
+###返回
+{
+  "took" : 5,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 1,
+    "successful" : 1,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 10,
+      "relation" : "eq"
+    },
+    "max_score" : null,
+    "hits" : [ ]
+  },
+  "aggregations" : {
+    "size_stats" : {
+      "count" : 10,
+      "min" : 0.0,
+      "max" : 9.0,
+      "avg" : 4.5,
+      "sum" : 45.0
+    }
+  }
+}
+```
+
+### 管道聚合
+
+> 管道聚合是一种特殊的聚合类型，对其他聚合的结果进行再次计算和分析，从而实现更复杂的数据统计和分析任务。
+>
+> 以下示例中的max_bucket可以理解为子聚合或者管道子聚合，在已聚合结果基础上进一步取出所有bucket中的最大值及最大值所在bucket。
+
+| 子类名称                  | 含义                                             |
+| ------------------------- | ------------------------------------------------ |
+| bucket selector选择子聚合 | 对聚合结果进一步筛选和运算                       |
+| bucket script脚本子聚合   | 对聚合结果进行脚本运算，生成新的聚合结果         |
+| bucket sort排序子聚合     | 对聚合结果某字段进行排序                         |
+| max bucket最大值子聚合    | 获取外层聚合下度量的最大值的桶，并输出桶的值和键 |
+| min bucket最小值子聚合    | 获取外层聚合下度量的最小值的桶，并输出桶的值和键 |
+| stats bucket统计子聚合    | 获取外层聚合统计结果                             |
+| sum bucket求和子聚合      | 获取外层聚合求和结果                             |
+
+~~~json
+####pipeline管道子聚合
+POST my_index_1103/_search
+{
+  "size": 0,
+  "aggs": {
+    "hole_terms_agg": {
+      "terms": {
+        "field": "has_hole"
+      },
+      "aggs": {
+        "max_value_aggs": {
+          "max": {
+            "field": "size"
+          }
+        }
+      }
+    },
+    "max_hole_color_aggs": {
+      "max_bucket": {
+        "buckets_path": "hole_terms_agg>max_value_aggs"
+      }
+    }
+  }
+}
+
+##返回结果
+{
+  "took" : 1,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 1,
+    "successful" : 1,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 19,
+      "relation" : "eq"
+    },
+    "max_score" : null,
+    "hits" : [ ]
+  },
+  "aggregations" : {
+    "hole_terms_agg" : {
+      "doc_count_error_upper_bound" : 0,
+      "sum_other_doc_count" : 0,
+      "buckets" : [
+        {
+          "key" : "0",
+          "doc_count" : 10,
+          "max_value_aggs" : {
+            "value" : 9.0
+          }
+        },
+        {
+          "key" : "1",
+          "doc_count" : 9,
+          "max_value_aggs" : {
+            "value" : 8.0
+          }
+        }
+      ]
+    },
+    "max_hole_color_aggs" : {
+      "value" : 9.0,
+      "keys" : [
+        "0"
+      ]
+    }
+  }
+}
+~~~
+
+## 组合聚合
+
+
+
 # ES安全之X-Pack
 
 ## 1、什么是Xpack
