@@ -1874,6 +1874,125 @@ GET /index_person/_search
 
 ![运行结果](images/b89ca3a8e47d4155b306765419fe0fc5.png)
 
+#### 5.5 composite
+
+> 1.组合聚合打破了传统的多痛聚合只能依赖单一类型的限制，可以对多种类型的桶聚合进行复合。很灵活。
+>
+> 2.支持聚合后分页（仅支持向后翻页），返回值带有after，每次请求带上即可完成分页功能。
+
+##### 5.5.1 dsl
+
+~~~json
+GET /index_person/_search
+{
+  "size": 0,
+  "aggs": {
+    "agg_province_sex": {
+      "composite": {
+        "sources": [
+          {
+            "agg_province": {
+              "terms": {
+                "field": "province"
+              }
+            }
+          },
+          {
+            "agg_sex": {
+              "terms": {
+                "field": "sex"
+              }
+            }
+          }
+        ]
+      },
+      "aggs": {
+        "max_age": {
+          "max": {
+            "field": "age"
+          }
+        }
+      }
+    }
+  }
+}
+~~~
+
+##### 5.5.2 运行结果
+
+![image-20240417172642811](images/image-20240417172642811.png)
+
+### 环比问题
+
+~~~json
+####环比求解实现
+POST my_index_1105/_search
+{
+  "size": 0,----------------------------------------------------不显示检索结果
+  "aggs": {
+    "range_aggs": {
+      "range": {------------------------------------------------全量数据聚合
+        "field": "insert_date",
+        "format": "yyyy-MM-dd",
+        "ranges": [
+          {
+            "from": "2022-11-01",
+            "to": "2022-12-31"
+          }
+        ]
+      },
+      "aggs": {
+        "11month_count": {--------------------------------------11月数据聚合
+          "filter": {
+            "range": {
+              "insert_date": {
+                "gte": "2022-11-01",
+                "lte": "2022-11-30"
+              }
+            }
+          },
+          "aggs": {
+            "sum_aggs": {
+              "sum": {
+                "field": "count"
+              }
+            }
+          }
+        },
+        "12month_count": {-----------------------------------12月数据聚合
+          "filter": {
+            "range": {
+              "insert_date": {
+                "gte": "2022-12-01",
+                "lte": "2022-12-31"
+              }
+            }
+          },
+          "aggs": {
+            "sum_aggs": {
+              "sum": {
+                "field": "count"
+              }
+            }
+          }
+        },
+        "bucket_division": {----------------------------------求解环比上升比例
+          "bucket_script": {
+            "buckets_path": {
+              "pre_month_count": "11month_count > sum_aggs",
+              "cur_month_count": "12month_count > sum_aggs"
+            },
+            "script": "(params.cur_month_count - params.pre_month_count) / params.pre_month_count"
+          }
+        }
+      }
+    }
+  }
+}
+~~~
+
+
+
 # ES安全之X-Pack
 
 ## 1、什么是Xpack
