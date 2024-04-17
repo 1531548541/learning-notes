@@ -1520,7 +1520,359 @@ POST my_index_1103/_search
 
 ## 组合聚合
 
+### 1、背景
 
+我们知道在`sql`中是可以实现 `group by 字段a,字段b`，那么这种效果在`elasticsearch`中该如何实现呢？此处我们记录在`elasticsearch`中的3种方式来实现这个效果。
+
+### 2、实现多字段聚合的思路
+
+![实现多字段聚合的思路](images/1014da1aeb2e4a68bf7170f7f4687e9e.png)
+
+图片来源：https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations-bucket-terms-aggregation.html
+从上图中，我们可以知道，可以通过3种方式来实现 多字段的聚合操作。
+
+### 3、需求
+
+根据省(province)和性别(sex)来进行聚合，再根据每个桶中的最大年龄(age)倒序。
+
+### 4、数据准备
+
+#### 4.1 创建索引
+
+~~~json
+PUT /index_person
+{
+  "settings": {
+    "number_of_shards": 1
+  },
+  "mappings": {
+    "properties": {
+      "id": {
+        "type": "long"
+      },
+      "name": {
+        "type": "keyword"
+      },
+      "province": {
+        "type": "keyword"
+      },
+      "sex": {
+        "type": "keyword"
+      },
+      "age": {
+        "type": "integer"
+      },
+      "address": {
+        "type": "text",
+        "analyzer": "ik_max_word",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      }
+    }
+  }
+}
+~~~
+
+#### 4.2 准备数据
+
+~~~json
+PUT /_bulk
+{"create":{"_index":"index_person","_id":1}}
+{"id":1,"name":"张三","sex":"男","age":20,"province":"湖北","address":"湖北省黄冈市罗田县匡河镇"}
+{"create":{"_index":"index_person","_id":2}}
+{"id":2,"name":"李四","sex":"男","age":19,"province":"江苏","address":"江苏省南京市"}
+{"create":{"_index":"index_person","_id":3}}
+{"id":3,"name":"王武","sex":"女","age":25,"province":"湖北","address":"湖北省武汉市江汉区"}
+{"create":{"_index":"index_person","_id":4}}
+{"id":4,"name":"赵六","sex":"女","age":30,"province":"北京","address":"北京市东城区"}
+{"create":{"_index":"index_person","_id":5}}
+{"id":5,"name":"钱七","sex":"女","age":16,"province":"北京","address":"北京市西城区"}
+{"create":{"_index":"index_person","_id":6}}
+{"id":6,"name":"王八","sex":"女","age":45,"province":"北京","address":"北京市朝阳区"}
+~~~
+
+### 5、实现方式
+
+#### 5.1 multi_terms实现
+
+##### 5.1.1 dsl
+
+~~~json
+GET /index_person/_search
+{
+  "size": 0,
+  "aggs": {
+    "agg_province_sex": {
+      "multi_terms": {
+        "size": 10,
+        "shard_size": 25,
+        "order":{
+          "max_age": "desc"    
+        },
+        "terms": [
+          {
+            "field": "province",
+            "missing": "defaultProvince"
+          },
+          {
+            "field": "sex"
+          }
+        ]
+      },
+      "aggs": {
+        "max_age": {
+          "max": {
+            "field": "age"
+          }
+        }
+      }
+    }
+  }
+}
+~~~
+
+##### 5.1.2 java 代码
+
+```java
+    @Test
+    @DisplayName("多term聚合-根据省和性别聚合，然后根据最大年龄倒序")
+    public void agg01() throws IOException {
+
+        SearchRequest searchRequest = new SearchRequest.Builder()
+                .size(0)
+                .index("index_person")
+                .aggregations("agg_province_sex", agg ->
+                        agg.multiTerms(multiTerms ->
+                                        multiTerms.terms(term -> term.field("province"))
+                                                .terms(term -> term.field("sex"))
+                                                .order(new NamedValue<>("max_age", SortOrder.Desc))
+                                )
+                                .aggregations("max_age", ageAgg ->
+                                        ageAgg.max(max -> max.field("age")))
+
+                )
+                .build();
+        System.out.println(searchRequest);
+        SearchResponse<Object> response = client.search(searchRequest, Object.class);
+        System.out.println(response);
+    }
+
+```
+
+##### 5.1.3 运行结果
+
+![运行结果](images/431215e24af54e0e9ebdf6e3d5cc6690.png)
+
+#### 5.2 script实现
+
+##### 5.2.1 dsl
+
+~~~json
+GET /index_person/_search
+{
+  "size": 0,
+  "runtime_mappings": {
+    "runtime_province_sex": {
+      "type": "keyword",
+      "script": """
+          String province = doc['province'].value;
+          String sex = doc['sex'].value;
+          emit(province + '|' + sex);
+      """
+    }
+  },
+  "aggs": {
+    "agg_province_sex": {
+      "terms": {
+        "field": "runtime_province_sex",
+        "size": 10,
+        "shard_size": 25,
+        "order": {
+          "max_age": "desc"
+        }
+      },
+      "aggs": {
+        "max_age": {
+          "max": {
+            "field": "age"
+          }
+        }
+      }
+    }
+  }
+}
+~~~
+
+##### 5.2.2 java代码
+
+```java
+@Test
+    @DisplayName("多term聚合-根据省和性别聚合，然后根据最大年龄倒序")
+    public void agg02() throws IOException {
+
+        SearchRequest searchRequest = new SearchRequest.Builder()
+                .size(0)
+                .index("index_person")
+                .runtimeMappings("runtime_province_sex", field -> {
+                    field.type(RuntimeFieldType.Keyword);
+                    field.script(script -> script.inline(new InlineScript.Builder()
+                            .lang(ScriptLanguage.Painless)
+                            .source("String province = doc['province'].value;\n" +
+                                    "          String sex = doc['sex'].value;\n" +
+                                    "          emit(province + '|' + sex);")
+                            .build()));
+                    return field;
+                })
+                .aggregations("agg_province_sex", agg ->
+                        agg.terms(terms ->
+                                        terms.field("runtime_province_sex")
+                                                .size(10)
+                                                .shardSize(25)
+                                                .order(new NamedValue<>("max_age", SortOrder.Desc))
+                                )
+                                .aggregations("max_age", minAgg ->
+                                        minAgg.max(max -> max.field("age")))
+                )
+                .build();
+        System.out.println(searchRequest);
+        SearchResponse<Object> response = client.search(searchRequest, Object.class);
+        System.out.println(response);
+    }
+
+```
+
+##### 5.2.3 运行结果
+
+![运行结果](images/2e90c46ff82f43b2be82de4cb83a806e.png)
+
+#### 5.3 通过copyto实现
+
+通过copyto没实现，此处故先不考虑
+
+#### 5.4 通过pipeline来实现
+
+实现思路：
+创建mapping时，多创建一个字段pipeline_province_sex，该字段的值由创建数据时指定pipeline来生产。
+
+##### 5.4.1 创建mapping
+
+~~~json
+PUT /index_person
+{
+  "settings": {
+    "number_of_shards": 1
+  },
+  "mappings": {
+    "properties": {
+      "id": {
+        "type": "long"
+      },
+      "name": {
+        "type": "keyword"
+      },
+      "province": {
+        "type": "keyword"
+      },
+      "sex": {
+        "type": "keyword"
+      },
+      "age": {
+        "type": "integer"
+      },
+      #此处指定了一个字段pipeline_province_sex，该字段的值会由pipeline来处理。
+      "pipeline_province_sex":{
+        "type": "keyword"
+      },
+      "address": {
+        "type": "text",
+        "analyzer": "ik_max_word",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      }
+    }
+  }
+}
+~~~
+
+##### 5.4.2 创建pipeline
+
+~~~json
+PUT _ingest/pipeline/pipeline_index_person_provice_sex
+{
+  "description": "将provice和sex的值拼接起来",
+  "processors": [
+    {
+      "set": {
+        "field": "pipeline_province_sex",
+        "value": ["{{province}}", "{{sex}}"]
+      }, 
+      "join": {
+        "field": "pipeline_province_sex",
+        "separator": "|"
+      }
+    }
+  ]
+}
+~~~
+
+##### 5.4.3 插入数据
+
+~~~json
+#注意： 此处的插入需要指定上一步的pipeline。pipeline=pipeline_index_person_provice_sex
+PUT /_bulk?pipeline=pipeline_index_person_provice_sex
+{"create":{"_index":"index_person","_id":1}}
+{"id":1,"name":"张三","sex":"男","age":20,"province":"湖北","address":"湖北省黄冈市罗田县匡河镇"}
+{"create":{"_index":"index_person","_id":2}}
+{"id":2,"name":"李四","sex":"男","age":19,"province":"江苏","address":"江苏省南京市"}
+{"create":{"_index":"index_person","_id":3}}
+{"id":3,"name":"王武","sex":"女","age":25,"province":"湖北","address":"湖北省武汉市江汉区"}
+{"create":{"_index":"index_person","_id":4}}
+{"id":4,"name":"赵六","sex":"女","age":30,"province":"北京","address":"北京市东城区"}
+{"create":{"_index":"index_person","_id":5}}
+{"id":5,"name":"钱七","sex":"女","age":16,"province":"北京","address":"北京市西城区"}
+{"create":{"_index":"index_person","_id":6}}
+{"id":6,"name":"王八","sex":"女","age":45,"province":"北京","address":"北京市朝阳区"}
+~~~
+
+##### 5.4.4 聚合dsl
+
+~~~json
+GET /index_person/_search
+{
+  "size": 0,
+  "aggs": {
+    "agg_province_sex": {
+      "terms": {
+        "field": "pipeline_province_sex",
+        "size": 10,
+        "shard_size": 25,
+        "order": {
+          "max_age": "desc"   
+        }
+      }, 
+      "aggs": {
+        "max_age": {
+          "max": {
+            "field": "age"
+          }
+        }
+      }
+    }
+  }
+}
+~~~
+
+##### 5.4.5 运行结果
+
+![运行结果](images/b89ca3a8e47d4155b306765419fe0fc5.png)
 
 # ES安全之X-Pack
 
@@ -1727,8 +2079,11 @@ cluster.name: zf-es
 node.name: node-1
 network.host: 0.0.0.0
 http.port: 9200
+#设置节点之间的tcp端口，默认是9300
 transport.tcp.host: 8544
+#集群的节点列表
 discovery.seed_hosts: ["node128:9301"]
+#初始master节点
 cluster.initial_master_nodes: ["node128"]
 
 path.data: /opt/zfbdp/data/elasticsearch
@@ -1748,7 +2103,9 @@ xpack.security.transport.ssl:
 
 action.destructive_requires_name: true
 bootstrap.system_call_filter: false
-http.cors.allow-origin: "*"
+#是否允许跨域REST请求
 http.cors.enabled: true
+#允许REST请求来自何处
+http.cors.allow-origin: "*"
 ~~~
 
