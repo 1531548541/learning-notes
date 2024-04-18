@@ -1599,6 +1599,8 @@ PUT /_bulk
 
 #### 5.1 multi_terms实现（V8.x）
 
+> multi_terms存在性能问题。当需要按文档数或组合键上的度量聚合进行排序并获得前N个结果时，multi_term聚合是最有用的。如果不需要排序，并且希望使用嵌套项检索所有值，则nested terms聚合（嵌套聚合）或 composite聚合将是一种更快、更节省内存的解决方案。
+
 ##### 5.1.1 dsl
 
 ~~~json
