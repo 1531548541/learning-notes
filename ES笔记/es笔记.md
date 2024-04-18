@@ -1597,7 +1597,7 @@ PUT /_bulk
 
 ### 5、实现方式
 
-#### 5.1 multi_terms实现
+#### 5.1 multi_terms实现（V8.x）
 
 ##### 5.1.1 dsl
 
@@ -1991,7 +1991,329 @@ POST my_index_1105/_search
 }
 ~~~
 
+## ES去重
 
+> 1.对ES检索结果进行去重计数
+
+### cardinality
+
+~~~json
+POST my_index_1106/_search
+{
+  "size": 0,
+  "aggs": {
+    "brand_count": {
+      "cardinality": {
+        "field": "brand.keyword"
+      }
+    }
+  }
+}
+
+#返回结果
+{
+  "took" : 182,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 1,
+    "successful" : 1,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 2,
+      "relation" : "eq"
+    },
+    "max_score" : null,
+    "hits" : [ ]
+  },
+  "aggregations" : {
+    "brand_count" : {
+      "value" : 2
+    }
+  }
+}
+~~~
+
+> 2.对ES检索结果进行去重后显示
+
+### top_hits
+
+~~~json
+####top_hits子聚合
+POST my_index_1106/_search
+{
+  "size": 0,
+  "query": {
+    "match_all": {}
+  },
+  "aggs": {
+    "aggs_by_brand": {
+      "terms": {
+        "field": "brand",
+        "size": 10
+      },
+      "aggs": {
+        "pt_tops": {
+          "top_hits": {
+            "_source": {
+              "includes": [
+                "brand",
+                "name",
+                "color"
+              ]
+            },
+            "sort": [
+              {
+                "pt": {
+                  "order": "desc"
+                }
+              }
+            ],
+            "size": 1
+          }
+        }
+      }
+    }
+  }
+}
+
+#返回结果
+{
+  "took" : 25,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 1,
+    "successful" : 1,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 2,
+      "relation" : "eq"
+    },
+    "max_score" : null,
+    "hits" : [ ]
+  },
+  "aggregations" : {
+    "aggs_by_brand" : {
+      "doc_count_error_upper_bound" : 0,
+      "sum_other_doc_count" : 0,
+      "buckets" : [
+        {
+          "key" : "brand_a",
+          "doc_count" : 1,
+          "pt_tops" : {
+            "hits" : {
+              "total" : {
+                "value" : 1,
+                "relation" : "eq"
+              },
+              "max_score" : null,
+              "hits" : [
+                {
+                  "_index" : "my_index_1106",
+                  "_type" : "_doc",
+                  "_id" : "10",
+                  "_score" : null,
+                  "_source" : {
+                    "color" : "red",
+                    "name" : "product_01",
+                    "brand" : "brand_a"
+                  },
+                  "sort" : [
+                    1609459200000
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "key" : "brand_b",
+          "doc_count" : 1,
+          "pt_tops" : {
+            "hits" : {
+              "total" : {
+                "value" : 1,
+                "relation" : "eq"
+              },
+              "max_score" : null,
+              "hits" : [
+                {
+                  "_index" : "my_index_1106",
+                  "_type" : "_doc",
+                  "_id" : "11",
+                  "_score" : null,
+                  "_source" : {
+                    "color" : "red",
+                    "name" : "product_02",
+                    "brand" : "brand_b"
+                  },
+                  "sort" : [
+                    1612137600000
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+~~~
+
+### 折叠去重
+
+> **collapse去重：**可以将多个相同的文档缩成一个文档，并仅保留一个代表文档。collapse的去重是在聚合之前进行的，因此它可以有效地减少数据量，提高查询性能。在Elasticsearch中，collapse功能扮演着合并及简化查询结果的角色。它可以将具有相同字段值的多个文档折叠成一个具有代表性的文档。请注意，虽然collapse
+> 操作在一定程度上类似于去重，但collapse实际上是对查询结果进行的优化处理而非聚合操作的一部分。
+>
+> **tophits去重:**一种子聚合方式，可以在聚合结果中查找最高分的文档。在某些情况下，可以使用top_hits来对文档进行去重，因为它只会返回每个聚合组中分数最高的文档。但是，top_hits的去重是在聚合之后进行的，因此可能不会有效地减小数据量。
+>
+> 总之，在想要尽早减少数据量并提高查询性能时，请使用collapse去重方式;如果需要在聚合结果中查找最高分的文档，则应使用tophits方式。
+
+~~~json
+####折叠去重实现
+POST my_index_1106/_search
+{
+  "query": {
+    "match_all": {}
+  },
+  "collapse": {
+    "field": "brand.keyword",
+    "inner_hits": {
+      "name": "by_color",
+      "collapse": {
+        "field": "color.keyword"
+      },
+      "size": 5
+    }
+  }
+}
+
+#返回结果
+{
+  "took" : 9,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 1,
+    "successful" : 1,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 2,
+      "relation" : "eq"
+    },
+    "max_score" : null,
+    "hits" : [
+      {
+        "_index" : "my_index_1106",
+        "_type" : "_doc",
+        "_id" : "10",
+        "_score" : 1.0,
+        "_source" : {
+          "brand" : "brand_a",
+          "pt" : "2021-01-01",
+          "name" : "product_01",
+          "color" : "red",
+          "price" : 600
+        },
+        "fields" : {
+          "brand.keyword" : [
+            "brand_a"
+          ]
+        },
+        "inner_hits" : {
+          "by_color" : {
+            "hits" : {
+              "total" : {
+                "value" : 1,
+                "relation" : "eq"
+              },
+              "max_score" : null,
+              "hits" : [
+                {
+                  "_index" : "my_index_1106",
+                  "_type" : "_doc",
+                  "_id" : "10",
+                  "_score" : 1.0,
+                  "_source" : {
+                    "brand" : "brand_a",
+                    "pt" : "2021-01-01",
+                    "name" : "product_01",
+                    "color" : "red",
+                    "price" : 600
+                  },
+                  "fields" : {
+                    "color.keyword" : [
+                      "red"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "_index" : "my_index_1106",
+        "_type" : "_doc",
+        "_id" : "11",
+        "_score" : 1.0,
+        "_source" : {
+          "brand" : "brand_b",
+          "pt" : "2021-02-01",
+          "name" : "product_02",
+          "color" : "red",
+          "price" : 200
+        },
+        "fields" : {
+          "brand.keyword" : [
+            "brand_b"
+          ]
+        },
+        "inner_hits" : {
+          "by_color" : {
+            "hits" : {
+              "total" : {
+                "value" : 1,
+                "relation" : "eq"
+              },
+              "max_score" : null,
+              "hits" : [
+                {
+                  "_index" : "my_index_1106",
+                  "_type" : "_doc",
+                  "_id" : "11",
+                  "_score" : 1.0,
+                  "_source" : {
+                    "brand" : "brand_b",
+                    "pt" : "2021-02-01",
+                    "name" : "product_02",
+                    "color" : "red",
+                    "price" : 200
+                  },
+                  "fields" : {
+                    "color.keyword" : [
+                      "red"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  }
+}
+~~~
 
 # ES安全之X-Pack
 
