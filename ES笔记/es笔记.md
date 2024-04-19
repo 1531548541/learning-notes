@@ -19,6 +19,8 @@ GET /_cat/templates
 
 # 安装
 
+## 安装ES
+
 ~~~sh
 #准备文件和文件夹，并chmod -R 777 xxx
 #配置文件内容，参照
@@ -63,7 +65,30 @@ docker run --name kibana -e ELASTICSEARCH_HOSTS=http://192.168.200.128:9200 -p 5
 
 ~~~
 
+## 安装ik分词器
 
+1. 下载 https://release.infinilabs.com/analysis-ik/stable/
+
+2. 放入plugins目录
+
+   ~~~sh
+   #由于安装es的时候已经挂载了plugins目录，若没挂载则需要docker cp到容器内
+   #docker cp ik [容器id]:/usr/share/elasticsearch/plugins
+   cd /opt/docker/elasticsearch/plugins
+   mkdir ik
+   #解压上传到ik目录下
+   ~~~
+
+3. 重启es
+
+4. 验证
+
+   ~~~sh
+   #进入容器
+   docker exec -it [容器id] bash
+   #查看是否安装成功
+   ./bin/elasticsearch-plugin list
+   ~~~
 
 # ES实现原理
 
@@ -1134,6 +1159,410 @@ GET /_cluster/health
 # 路由TODO
 
 >
+
+# 检索
+
+![img](images/1efc9469-591f-46b7-8655-9c4e50643938.jpg)
+
+## 全文检索
+
+> es会进行分词匹配
+
+### match
+
+~~~json
+POST my_index_1001/_search
+{
+  "query": {
+    "match": {
+      "title": "乌兰新闻"
+    }
+  }
+}
+~~~
+
+### match_phrase
+
+> match_phrase检索适用于注重精准度的召回场景。与match检索(分词检索)不同，match_phrase检索更适合称为短语匹配检索。这是因为match_phrase检索要求查询的词条顺序和文档中的词条顺序保持一致，以确保更高的精准度。因此，场景差异在于match_phrase 检索强调短语的完整性和顺序，以提高查询结果的准确性。实战中建议一一在需要精确匹配短语时使用 match_phrase 检索，以满足高精准度召回的需求。
+
+~~~json
+####短语匹配检索
+POST my_index_1001/_search
+{
+  "query": {
+    "match_phrase": {
+      "title": {
+        "query": "乌兰新闻网"
+      }
+    }
+  }
+}
+~~~
+
+### match_phrase_prefix
+
+> 查询词语需要按顺序匹配文档中的内容，同时允许最后一个词语只匹配其前缀。使得在部分用户输入、搜索建议或自动补全等场景下非常有用。
+
+~~~json
+POST my_index_1001/_search
+{
+  "query": {
+    "match_phrase_prefix": {
+      "title": {
+        "query": "乌兰新"
+      }
+    }
+  }
+}
+~~~
+
+### multi_match
+
+~~~json
+#### mulit_match 检索案例
+POST my_index_1001/_search
+{
+  "query": {
+    "multi_match" : {
+      "query" : "乌兰",
+      "fields" : [ "title^3", "message" ]  #^3用来提高权重，提高score
+    }
+  }
+}
+~~~
+
+### query_string
+
+~~~json
+#### query_string检索案例
+POST my_index_1001/_search
+{
+  "query": {
+    "query_string": {
+      "default_field": "title",
+      "query": "乌兰 AND 新闻"
+    }
+  }
+}
+~~~
+
+### simple_query_string
+
+> simple_query_string 和query_string 的区别如下
+> 1) simple_query_string对语法的核查并不严格。simple_query_string在输入语句的语法不对时并不会报错。
+>
+> 2) simple_query_string是一种简单的査询语法，只支持单词查询、短语查询或者包含查询，不支持使用通配符和正则表达式。这种查询方式更加安全，因为它不会产生性能问题。
+>
+> 3) query_string是一种复杂的查询语法，它支持使用通配符、正则表达式和复杂的布尔运算。但这种复杂性可能会导致性能问题。
+>
+> 总的来说，如果查询语法比较简单，则可以使用simple_query_string 。如果查询语法非常复杂，则可以使用 query_string。
+
+~~~json
+POST my_index_1001/_search
+{
+  "query": {
+    "simple_query_string": {
+      "query": "乌兰 AND 新闻 AND",
+      "fields": ["title"]
+    }
+  }
+}
+~~~
+
+### match boolean prefix
+
+### intervals
+
+### combined fields
+
+## 精准匹配
+
+> 不分词，严格equals。`一般对keyword类型的字段进行检索`。
+
+### term
+
+~~~json
+### term单字段精准匹配
+POST my_index_1001/_search
+{
+  "query": {
+    "term": {
+      "title.keyword": "乌兰新闻网欢迎您!"
+    }
+  }
+}
+~~~
+
+### terms
+
+~~~json
+#### terms 多字段精准检索
+POST my_index_1001/_search
+{
+  "query": {
+    "terms": {
+      "souce_class": [
+        "weibo",
+        "wechat"
+      ]
+    }
+  }
+}
+~~~
+
+### range
+
+~~~json
+#### range 区间范围检索
+POST my_index_1001/_search
+{
+  "query": {
+    "range": {
+      "popular_degree": {
+        "gte": 10,
+        "lte": 100
+      }
+    }
+  },
+  "sort": [
+    {
+      "popular_degree": {
+        "order": "desc"
+      }
+    }
+  ]
+}
+~~~
+
+### exists
+
+> 字段存在
+>
+> `注意：字段值为空值也会认为存在！！！`
+>
+> ![image-20240419144554039](images/image-20240419144554039.png)
+
+~~~json
+#### exists检索
+POST my_index_1001/_search
+{
+  "query": {
+    "exists": {
+      "field": "title.keyword"
+    }
+  }
+}
+~~~
+
+### wildcard
+
+> 模糊查询
+>
+> *表示0或多个字符，可用于匹配任意长度的字符串
+>
+> ?表示一个字符，可用于匹配任意单个字符
+
+~~~json
+POST my_index_1001/_search
+{
+  "profile": true, 
+  "query": {
+    "wildcard": {
+      "title.keyword": {
+        "value": "*乌兰*"
+      }
+    }
+  }
+}
+~~~
+
+### prefix
+
+> 等同于startWith
+
+~~~json
+####执行前缀匹配检索
+POST my_index_1002/_search
+{
+  "query": {
+    "prefix": {
+      "title.keyword": {
+        "value": "考试"
+      }
+    }
+  }
+}
+~~~
+
+### terms set
+
+> 主要解决多值字段中的文档匹配问题，其中匹配的数量可以是固定值，也可以是某个字段的动态值。
+>
+> minimum_should_match_field、minimum_should_match_script
+
+~~~json
+GET my_index_1003/_search
+{
+  "query": {
+    "terms_set": {
+      "tags": {
+        "terms": ["喜剧", "动作", "科幻"],
+        "minimum_should_match_field": "tags_count"  #决定最少匹配数量的字段
+      }
+    }
+  }
+}
+
+
+##返回结果
+{
+  "took" : 1019,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 1,
+    "successful" : 1,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 2,
+      "relation" : "eq"
+    },
+    "max_score" : 1.8215328,
+    "hits" : [
+      {
+        "_index" : "my_index_1003",
+        "_type" : "_doc",
+        "_id" : "1",
+        "_score" : 1.8215328,
+        "_source" : {
+          "title" : "电影1",
+          "tags" : [
+            "喜剧",
+            "动作",
+            "科幻"
+          ],
+          "tags_count" : 3
+        }
+      },
+      {
+        "_index" : "my_index_1003",
+        "_type" : "_doc",
+        "_id" : "4",
+        "_score" : 1.0304071,
+        "_source" : {
+          "title" : "电影3",
+          "tags" : [
+            "动作",
+            "科幻",
+            "家庭"
+          ],
+          "tags_count" : 2
+        }
+      }
+    ]
+  }
+}
+~~~
+
+~~~json
+GET my_index_1003/_search
+{
+  "query": {
+    "terms_set": {
+      "tags": {
+        "terms": [
+          "喜剧",
+          "动作",
+          "科幻"
+        ],
+        "minimum_should_match_script": {
+          "source": "doc['tags_count'].value * 0.7"
+        }
+      }
+    }
+  }
+}
+~~~
+
+### fuzzy
+
+> 支持编辑距离的模糊检索，fuzzy检索是一种强大的搜索功能，它能够在用户输入内容存在拼写错误或上下文不一致时，仍然返回与搜索词相似的文档，
+
+~~~json
+####执行检索，输入：apple，langauge，pager均能召回数据。
+POST my_index_1004/_search
+{
+  "query": {
+    "fuzzy": {
+      "title": {
+        "value": "langauge"
+      }
+    }
+  }
+}
+~~~
+
+### IDs
+
+~~~json
+####基于id进行检索
+POST my_index_1005/_search
+{
+  "query": {
+    "ids": {
+      "values": [
+        "1",
+        "2",
+        "3"
+      ]
+    }
+  }
+}
+~~~
+
+### regexp
+
+~~~json
+#正则
+GET my_index_1005/_search
+{
+  "query": {
+    "regexp": {
+      "product_name.keyword": {
+        "value": "Lap.."  #以Lap开头、后面紧跟两个任意字符的product_name
+      }
+    }
+  }
+}
+~~~
+
+## 多表关联检索
+
+nested
+
+has child
+
+has parent
+
+parent id
+
+## 组合检索
+
+bool
+
+boosting
+
+constant score
+
+disjunction max
+
+function_score
+
+## 检索模板
+
+
 
 # 聚合
 
