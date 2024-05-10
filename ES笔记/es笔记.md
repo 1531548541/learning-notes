@@ -1562,7 +1562,204 @@ function_score
 
 ## 检索模板
 
+> ES使用Mustache模板引擎（参考http://mustache.github.io）来为查询模板生成可用的查询语句。如你所见，每个变量被双大括号包裹，这一点是Mustache规范要求的，是该模板引擎间接引用变量的方式。
+>
+> 使用模板好处：
+>
+> - 避免在多个地方重复代码
+> - 更容易测试和执行您的查询
+> - 在应用程序间共享查询
+> - 允许用户只执行一些预定义的查询
+> - 将搜索逻辑与应用程序逻辑分离
 
+### 1. 条件表达式
+
+{{val}}表达式用来插入变量val的值。{{#val}}和{{/val}}则用来在变量val取值计算为true时把位于它们之间的变量标记替换为变量值。
+
+我们看一下下面这个示例：
+
+~~~json
+curl -XGET http://10.8.10.12:9200/operator_website_index/_search/template?pretty -H 'Content-Type: application/json' -d '
+{
+	"template":"{ {{#limit}}\"size\":2 {{/limit}} }",
+	"params":{
+		"limit": false
+	}
+}'
+~~~
+
+当 limit 为 true 或者 有值时(随便赋值只有有内容) 条件则生效 size: 2条件生效
+
+当limit为false或者未设置limit参数，条件size: 2不生效
+
+### 2.循环
+
+循环结构定义和条件表达式一模一样，都位于{{#val}}和{{/val}}之间。如果表达式中变量取值是数组，则可以使用{{.}}标记来指代当前变量值。
+
+例如，假定我们需要模板引擎遍历一个词项数组来生成一个词项查询，可以执行如下命令：
+
+~~~json
+curl -XGET http://10.8.10.12:9200/operator_website_index/_search/template?pretty -H 'Content-Type: application/json' -d '
+{
+        "template":{
+                "query":{
+                        "terms":{
+                                "website_name":[
+                                        "{{#website_name_param}}",
+                                        "{{.}}",
+                                        "{{/website_name_param}}"
+                                ]
+                        }
+                }
+        },
+        "params":{
+                "website_name_param":["fron","罗浮宫"]
+        }
+}'
+~~~
+
+#### 3. 默认值
+
+默认值标记允许我们在参数未定义时给它设置默认取值。比如，给var变量设置默认值语法的代码如下：
+
+~~~json
+{{var}}{{^var}}default value{{/var}}
+~~~
+
+举个例子，假定我们要给查询模板中的website_name_param参数设置默认值“1”，可以使用如下命令：
+
+~~~json
+curl -XGET http://10.8.10.12:9200/operator_website_index/_search/template?pretty -H 'Content-Type: application/json' -d '
+{
+	"template":{
+		"query":{
+			"term":{
+                        	"website_name": "{{website_name_param}}{{^website_name_param}}1{{/website_name_param}}"
+                        }
+                }
+        },
+        "params":{
+                "website_name_param": "罗浮宫"
+        }
+}'
+~~~
+
+这个命令将从Elasticsearch查询出所有website_name字段中包含罗浮宫的文档。而如果我们在params片段中不指定phrase参数的值，website_name_param则使用默认1来搜索。
+
+### 4.创建Mustache模板保存到ElasticSearch
+
+普通查询Demo
+创建template
+
+~~~json
+curl -XPOST http://10.8.10.12:9200/_scripts/my_search_template -H 'Content-Type: application/json' -d '
+    {
+      "script": {
+        "lang": "mustache",
+        "source": {
+          "query": {
+            "match": {
+              "{{my_field}}": "{{my_value}}"
+            }
+          }
+        }
+      }
+    }'
+~~~
+
+在这里，我们定义了一个叫做my_search_template的search template。如果我们想更新这个search template，我们可以直接进行修改，然后再次运行上面的命令即可。
+
+在match的字段里，我们定义了两个参数：my_field及my_value。下面，我们来首先建立一个叫做twitter的数据库：
+
+~~~json
+curl -XPUT http://10.8.10.12:9200/twitter/_doc/1  -H 'Content-Type: application/json' -d '
+    {
+      "user" : "双榆树-张三",
+      "message" : "今儿天气不错啊，出去转转去",
+      "uid" : 2,
+      "age" : 20,
+      "city" : "北京",
+      "province" : "北京",
+      "country" : "中国",
+      "address" : "中国北京市海淀区",
+      "location" : {
+        "lat" : "39.970718",
+        "lon" : "116.325747"
+      }
+    }'
+     
+curl -XPUT http://10.8.10.12:9200/twitter/_doc/2  -H 'Content-Type: application/json' -d '
+    {
+      "user" : "虹桥-老吴",
+      "message" : "好友来了都今天我生日，好友来了,什么 birthday happy 就成!",
+      "uid" : 7,
+      "age" : 90,
+      "city" : "上海",
+      "province" : "上海",
+      "country" : "中国",
+      "address" : "中国上海市闵行区",
+      "location" : {
+        "lat" : "31.175927",
+        "lon" : "121.383328"
+      }
+    }'
+
+~~~
+
+我们这里把上面的两个文档存于到twitter的index之中。我们现在可以使用我们刚才定义的search template来进行搜索：
+
+```json
+curl -XGET http://10.8.10.12:9200/twitter/_search/template -H 'Content-Type: application/json' -d '
+    {
+      "id": "my_search_template",
+      "params": {
+        "my_field": "city",
+        "my_value": "北京"
+      }
+    }'
+
+
+#返回结果
+{
+  "took" : 1,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 1,
+    "successful" : 1,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 1,
+      "relation" : "eq"
+    },
+    "max_score" : 1.3862942,
+    "hits" : [
+      {
+        "_index" : "twitter",
+        "_type" : "_doc",
+        "_id" : "1",
+        "_score" : 1.3862942,
+        "_source" : {
+          "user" : "双榆树-张三",
+          "message" : "今儿天气不错啊，出去转转去",
+          "uid" : 2,
+          "age" : 20,
+          "city" : "北京",
+          "province" : "北京",
+          "country" : "中国",
+          "address" : "中国北京市海淀区",
+          "location" : {
+            "lat" : "39.970718",
+            "lon" : "116.325747"
+          }
+        }
+      }
+    ]
+  }
+}
+```
 
 # 聚合
 
