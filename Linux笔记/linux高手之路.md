@@ -7,9 +7,16 @@
 ~~~sh
 #1.修改网络配置
 vi /etc/sysconfig/network-scripts/ifcfg-ens33
+
+
+#添加一下内容
+IPADDR=192.168.200.136
+NETMASK=255.255.255.0
+GATEWAY=192.168.200.2
+DNS1=114.114.114.114
 ~~~
 
-![image-20220906163549077](images/image-20220906163549077.png)
+![image-20240514091316692](images/image-20240514091316692.png)
 
 ~~~sh
 #2.重启网络
