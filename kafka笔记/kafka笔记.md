@@ -1834,7 +1834,7 @@ retry.backoff.ms:20000
 >
 >    - 【修改配置】
 >
->      ./bin/kafka-topics.sh --bootstrap-server localhost:9092 --topic aa --alter --add-config max.message.bytes=10485760
+>      ./bin/kafka-configs.sh --bootstrap-server localhost:9092 --topic aa --alter --add-config max.message.bytes=10485760
 >
 >    - 【查看是否生效】
 >
@@ -1844,7 +1844,7 @@ retry.backoff.ms:20000
 >
 >    - 【修改配置】
 >
->      ./bin/kafka-topics.sh --zookeeper localhost:2181 --entity-name aa --entity-type topics --alter --add-config max.message.bytes=10485760
+>      ./bin/kafka-configs.sh --zookeeper localhost:2181 --entity-name aa --entity-type topics --alter --add-config max.message.bytes=10485760
 >
 >    - 【查看是否生效】
 >
