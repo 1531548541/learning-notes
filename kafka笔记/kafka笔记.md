@@ -488,17 +488,19 @@ Kafka 的 producer 生产数据，要写入到 log 文件中，写的过程是�
 
 > - 整个生产者客户端由两个线程协调运行，这两个线程分别为**主线程**和 **Sender** 线程。
 >
-> - **RecrdAccumulator 主要用来缓存消息 Sender 线程可以批量发送，大小由buffer.memory参数决定，默认32MB。**如果生产者发送消息的速度超过发送到服务器的速度 ，则会导致生产者空间不足，这个时候 KafkaProducer send（） 方法调用要么被阻塞，要么抛出异常，这个取决于参数 max.block.ms 的配置，此参数的默认值为60000（60秒）。
+> - 在主线程中由KafkaProducer创建消息，然后通过可能的拦截器，序列化器，分区器的作用后缓存到消息累加器（RecordAccumulator，也称消息收集器）中。Sender线程负责从RecordAccumulator中获取消息并将其发送到kafka。
 >
-> - 主线程中发送过来的消息都会被迫加到 RecordAccumulator 的某个双端队列（ Deque<ProducerBatch＞）中。消息在网络上都是以Byte的形式传输的，在发送之前需要创建一块内存区域来保存对应的消息 。在 Kafka 产者客户端中，通过 java.io.ByteBuffer 实现消息内存的创建和释放。不过频繁的 建和释放是比较耗费资源的，在 RecordAccumulator 的内部还有一个 BufferPool,它主要用来实现 ByteBuffer 的复用，以实现缓存的高效利用 。不过BufferPool 只针对特定大小的ByteBuffer 进行管理，而其他大小的 ByteBuffer 不会缓存进 BufferPool 中，这个特定的大小batch.size 参数来指定，默认值为 16384B ，即 16KB。我们可以适当地调大 batch.size参数以便多缓存一些消息。
+> - **RecordAccumulator 主要用来缓存消息，Sender 线程可以批量发送，大小由buffer.memory参数决定，默认32MB。**如果生产者发送消息的速度超过发送到服务器的速度，则会导致生产者空间不足，这个时候 KafkaProducer的send方法调用要么被阻塞，要么抛出异常，这个取决于参数 max.block.ms 的配置，此参数的默认值为60000（60秒）。
 >
->   ​	ProducerBatch 大小和 batch.size 参数也有着密切的关系。当一条消息（ProducerRecord ) 流入 RecordAccumulator 时，会先找与消息分区所对应的双端队列（如果没有则新建），再从这个双端队列的尾部获取一个 ProducerBatch （如果没有则新建），查看 ProducerBatch 中是否还可以写入这个 ProducerRecord ，如果可以则写入，如果不可以则需要 建一个新ProducerBatch 。在新建 ProducerBatch时评估这条消息的大小是否超过 batch.size 参数大小，如果不超过，那么就以 batch.size 参数的大小来创建 ProducerBatch ，这样在使用完这段内存区域之后，可以通过 BufferPool 的管理来进行复用；如果超过，那就以评估的大小来创建ProducerBatch ，这段内存区域不会被复用。
+> - 主线程中发送过来的消息都会被迫加到 RecordAccumulator 的某个双端队列（ Deque<ProducerBatch＞）中。消息在网络上都是以Byte的形式传输的，在发送之前需要创建一块内存区域来保存对应的消息 。在 Kafka 生产者客户端中，通过 java.io.ByteBuffer 实现消息内存的创建和释放。不过频繁的创建和释放是比较耗费资源的，在 RecordAccumulator 的内部还有一个 BufferPool,它主要用来实现 ByteBuffer 的复用，以实现缓存的高效利用 。不过BufferPool 只针对特定大小的ByteBuffer 进行管理，而其他大小的 ByteBuffer 不会缓存进 BufferPool 中，这个特定的大小batch.size 参数来指定，默认值为 16384B ，即 16KB。我们可以适当地调大 batch.size参数以便多缓存一些消息。
 >
->   ​	Sender从RecordAccumulator 获取缓存的消息之后，会进一步将原本<分区, Deque<ProducerBatch>>的保存形式转变成＜Node,List< ProducerBatch>>的形式，其中 Node 表示 Kafka集群 broker 节点 。对于网络连接来说，生产者客户端是与具体 broker 节点建立的连接，也就是向具体的 broker 节点发送消息，而并不关心消息属于哪一个分区；而对于 KafkaProducer的应用逻辑而言，我们只关注向哪个分区中发送哪些消息，所以在这里需要做一个应用逻辑层面到网络IO层面的转换。
+>   ​	ProducerBatch 大小和 batch.size 参数也有着密切的关系。当一条消息（ProducerRecord ) 流入 RecordAccumulator 时，会先找与消息分区所对应的双端队列（如果没有则新建），再从这个双端队列的尾部获取一个 ProducerBatch （如果没有则新建），查看 ProducerBatch 中是否还可以写入这个 ProducerRecord ，如果可以则写入，如果不可以则需要创建一个新ProducerBatch 。在新建 ProducerBatch时评估这条消息的大小是否超过 batch.size 参数大小，如果不超过，那么就以 batch.size 参数的大小来创建 ProducerBatch ，这样在使用完这段内存区域之后，可以通过 BufferPool 的管理来进行复用；如果超过，那就以评估的大小来创建ProducerBatch ，这段内存区域不会被复用。
 >
->   ​	在转换成＜Node, List ProducerBatch>>的形式之后， Sender会进一步封装成＜Node,Request> 的形式，这样就可以将Request请求发往各个Node了， 这里Request是指Kafka的各种协议请求，对于消息发送而言就是指具体的 ProduceRequest。
+>   ​	Sender从RecordAccumulator 获取缓存的消息之后，会进一步将原本<分区, Deque<ProducerBatch>的保存形式转变成＜Node,List< ProducerBatch>>的形式，其中 Node 表示 Kafka集群 broker 节点 。对于网络连接来说，生产者客户端是与具体 broker 节点建立的连接，也就是向具体的 broker 节点发送消息，而并不关心消息属于哪一个分区；而对于 KafkaProducer的应用逻辑而言，我们只关注向哪个分区中发送哪些消息，所以在这里需要做一个应用逻辑层面到网络IO层面的转换。
 >
->   ​	请求在从Sender 线程发往Kafka之前还会保存到 InFlightRequests 中， InFlightRequests保存对象的具体形式为 Map<Nodeld, Deque<Request>＞，它的**主要作用是缓存了已经发出去但还没有收到响应的请求**。与此同时，InFlightRequests 还提供了许多管理类的方法，并且通过配置参数还可以限制每个连接（也就是客户端与 Node 之间的连接）最多缓存的请求数。**这个配置参数为 max.in.flight.requests.per.connection ，默认值为5，即每个连接最多只能缓存5个未响应的请求**，超过该数值之后就不能再向这个连接发送更多的请求了，除非有缓存的请求收到了响应（ Response ）。通过比Deque<Request> 的size 与这个参数的大小来判断对应的 Node 中是否己经堆积了很多未响应的消息，如果真是如此，那么说明这个 Node 节点负载较大或网络连接有问题，再继续向其发送请求会增大请求超时的可能。
+>   ​	在转换成＜Node, List<ProducerBatch>>的形式之后， Sender会进一步封装成＜Node,Request> 的形式，这样就可以将Request请求发往各个Node了， 这里Request是指Kafka的各种协议请求，对于消息发送而言就是指具体的 ProduceRequest。
+>
+>   ​	请求在从Sender 线程发往Kafka之前还会保存到 InFlightRequests 中， InFlightRequests保存对象的具体形式为 Map<Nodeld, Deque<Request＞>，它的**主要作用是缓存了已经发出去但还没有收到响应的请求**。与此同时，InFlightRequests 还提供了许多管理类的方法，并且通过配置参数还可以限制每个连接（也就是客户端与 Node 之间的连接）最多缓存的请求数。**这个配置参数为 max.in.flight.requests.per.connection ，默认值为5，即每个连接最多只能缓存5个未响应的请求**，超过该数值之后就不能再向这个连接发送更多的请求了，除非有缓存的请求收到了响应（ Response ）。通过比Deque<Request> 的size 与这个参数的大小来判断对应的 Node 中是否己经堆积了很多未响应的消息，如果真是如此，那么说明这个 Node 节点负载较大或网络连接有问题，再继续向其发送请求会增大请求超时的可能。
 >
 
 ### 元数据更新
@@ -507,7 +509,7 @@ Kafka 的 producer 生产数据，要写入到 log 文件中，写的过程是�
 
 ​	InFlightRequests 还可以获得 leastLoadedNode ，即所有 Node 中负载最小的那一个。这里的负载最小是通过每个 Node在InFlightRequests 中还未确认的请求决定的，未确认的请求越多则认为负载越大。对于图 2-2 中的 InFlightRequests 来说，图中展示了三个节点Node0 Node1 Node2，很明显 Node1 负载最小。也就是说， Node1为当前的 leastLoadedNode。选择leastLoadedNode 发送请求可以使它能够尽快发出，避免因网络拥塞等异常而影响整体的进度。 leastLoadedNode 的概念可以用于多个应用场合，比如元数据请求、消费者组播协议的交互。
 
-​	当客户端中没有需要使用的元数据信息时，比如没有指定的主题信息，或者超metadata.max.age.ms 时间没有更新元数据都会引起元数据的更新操作 。客户端参数metadata.max.age.ms 的默认值为 300000 ，即5分钟。元数据的更新操作是在客户端内部进行的，对客户端的外部使用者不可见。当需要更新元数据时，会先挑选出 leastLoadedNode, 然后向这个Node 发送 MetadataRequest 请求来获取具体的元数据信息。这个更新操作是由 Sender线程发起的， 建完MetadataRequest 之后同样会存入InF!ightRequests ，之后的步骤就和发送消息时的类似。元数据虽然由 Sender 线程负责更新，但是主线程也需要读取这些信息，这里的数据同步通过 synchronized final关键字来保障。
+​	当客户端中没有需要使用的元数据信息时，比如没有指定的主题信息，或者超metadata.max.age.ms 时间没有更新元数据都会引起元数据的更新操作。客户端参数metadata.max.age.ms 的默认值为 300000 ，即5分钟。元数据的更新操作是在客户端内部进行的，对客户端的外部使用者不可见。当需要更新元数据时，会先挑选出 leastLoadedNode, 然后向这个Node 发送 MetadataRequest 请求来获取具体的元数据信息。这个更新操作是由 Sender线程发起的，建完MetadataRequest 之后同样会存入InF!ightRequests ，之后的步骤就和发送消息时的类似。元数据虽然由 Sender 线程负责更新，但是主线程也需要读取这些信息，这里的数据同步通过 synchronized final关键字来保障。
 
 ### 发送过程
 
@@ -881,6 +883,47 @@ kafka-consumer-groups.sh --bootstrap-server node01:9092 --group wujiea --reset-o
 # Java API
 
 ## 生产者
+
+### 三种方法发送msg
+
+~~~java
+	/**
+     * 第一种直接发送，不管结果 有些异常捕捉不到  异步发送
+     */
+    private static void sendMessageForgetResult(){
+        ProducerRecord<String,String> record = new ProducerRecord<String,String>(
+                "kafka-study","name","Forget_result"
+        );
+        producer.send(record);
+        producer.close();
+    }
+ 
+    /**
+     * 第二种同步发送，等待执行结果 同步发送
+     * @return
+     * @throws Exception
+     */
+    private static RecordMetadata sendMessageSync() throws Exception{
+        ProducerRecord<String,String> record = new ProducerRecord<String,String>(
+                "kafka-study","name","sync"
+        );
+        RecordMetadata result = producer.send(record).get();
+        System.out.println(result.topic());
+        System.out.println(result.partition());
+        System.out.println(result.offset());
+        return result;
+    }
+ 
+    /**
+     * 第三种执行回调函数  异步发送
+     */
+    private static void sendMessageCallback(){
+        ProducerRecord<String,String> record = new ProducerRecord<String,String>(
+                "kafka-study","name","callback"
+        );
+        producer.send(record,new MyProducerCallback());
+    }
+~~~
 
 ### 乞丐版
 
@@ -2260,12 +2303,12 @@ leader epoch 代表 leader 的纪元信息（epoch），初始值为0。每当 l
 假设有两个节点A和B，B是leader节点，里面的数据如图：
 ![img](images/1204119-20191222125942438-1229550234.png)
 
-A发生重启，之后A不是先忙着截断日志而是先发送OffsetsForLeaderEpochRequest请求给B，B作为目前的leader在收到请求之后会返回当前的LEO（LogEndOffset，注意图中LE0和LEO的不同），与请求对应的响应为OffsetsForLeaderEpochResponse。如果 A 中的 LeaderEpoch（假设为 LE_A）和 B 中的不相同，那么 B 此时会查找 LeaderEpoch 为 LE_A+1 对应的 StartOffset 并返回给 A
+A发生重启，之后A不是先忙着截断日志而是先发送OffsetsForLeaderEpochRequest请求给B，B作为目前的leader，在收到请求之后会返回当前的LEO（LogEndOffset，注意图中LE0和LEO的不同），与请求对应的响应为OffsetsForLeaderEpochResponse。如果 A 中的 LeaderEpoch（假设为 LE_A）和 B 中的不相同，那么 B 此时会查找 LeaderEpoch 为 LE_A+1 对应的 StartOffset 并返回给 A
 ![img](images/1204119-20191222125952204-1607347196.png)
 
 如上图所示，A 在收到2之后发现和目前的 LEO 相同，也就不需要截断日志了，以此来保护数据的完整性。
 
-再如，之后 B 发生了宕机，A 成为新的 leader，那么对应的 LE=0 也变成了 LE=1，对应的消息 m2 此时就得到了保留。后续的消息都可以以 LE1 为 LeaderEpoch 陆续追加到 A 中。这个时候A就会有两个LE，第二LE所记录的Offset从2开始。如果B恢复了，那么就会从A中获取到LE+1的Offset为2的值返回给B。
+再如，之后 B 发生了宕机，A 成为新的 leader，那么对应的 LE=0 也变成了 LE=1，对应的消息 m2 此时就得到了保留。后续的消息都可以以 LE1 为 LeaderEpoch 陆续追加到 A 中。这个时候A就会有两个LE，第二个LE所记录的Offset从2开始。如果B恢复了，那么就会从A中获取到LE+1的Offset为2的值返回给B。
 ![img](images/1204119-20191222125959667-540513891.png)
 
 再来看看LE如何解决数据不一致的问题：
@@ -2359,22 +2402,25 @@ A发生重启，之后A不是先忙着截断日志而是先发送OffsetsForLeade
 
 ## Kafka的那些设计让它有如此高的性能？[#](https://www.cnblogs.com/luozhiyun/p/12079527.html#1921095329)
 
-1. 分区
-   kafka是个分布式集群的系统，整个系统可以包含多个broker，也就是多个服务器实例。每个主题topic会有多个分区，kafka将分区均匀地分配到整个集群中，当生产者向对应主题传递消息，消息通过负载均衡机制传递到不同的分区以减轻单个服务器实例的压力。
+1.分区
+kafka是个分布式集群的系统，整个系统可以包含多个broker，也就是多个服务器实例。每个主题topic会有多个分区，kafka将分区均匀地分配到整个集群中，当生产者向对应主题传递消息，消息通过负载均衡机制传递到不同的分区以减轻单个服务器实例的压力。
 
 一个Consumer Group中可以有多个consumer，多个consumer可以同时消费不同分区的消息，大大的提高了消费者的并行消费能力。但是一个分区中的消息只能被一个Consumer Group中的一个consumer消费。
 
-1. 网络传输上减少开销
-   批量发送：
-   在发送消息的时候，kafka不会直接将少量数据发送出去，否则每次发送少量的数据会增加网络传输频率，降低网络传输效率。kafka会先将消息缓存在内存中，当超过一个的大小或者超过一定的时间，那么会将这些消息进行批量发送。
-   端到端压缩：
-   当然网络传输时数据量小也可以减小网络负载，kafaka会将这些批量的数据进行压缩，将一批消息打包后进行压缩，发送broker服务器后，最终这些数据还是提供给消费者用，所以数据在服务器上还是保持压缩状态，不会进行解压，而且频繁的压缩和解压也会降低性能，最终还是以压缩的方式传递到消费者的手上。
-2. 顺序读写
-   kafka将消息追加到日志文件中，利用了磁盘的顺序读写，来提高读写效率。
-3. 零拷贝技术
+2.网络传输上减少开销
+批量发送：
+在发送消息的时候，kafka不会直接将少量数据发送出去，否则每次发送少量的数据会增加网络传输频率，降低网络传输效率。kafka会先将消息缓存在内存中，当超过一个的大小或者超过一定的时间，那么会将这些消息进行批量发送。
+端到端压缩：
+当然网络传输时数据量小也可以减小网络负载，kafaka会将这些批量的数据进行压缩，将一批消息打包后进行压缩，发送broker服务器后，最终这些数据还是提供给消费者用，所以数据在服务器上还是保持压缩状态，不会进行解压，而且频繁的压缩和解压也会降低性能，最终还是以压缩的方式传递到消费者的手上。
+
+3.顺序读写
+kafka将消息追加到日志文件中，利用了磁盘的顺序读写，来提高读写效率。
+
+4.零拷贝技术
 
 零拷贝将文件内容从磁盘通过DMA引擎复制到内核缓冲区，而且没有把数据复制到socket缓冲区，只是将数据位置和长度信息的描述符复制到了socket缓存区，然后直接将数据传输到网络接口，最后发送。这样大大减小了拷贝的次数，提高了效率。kafka正是调用linux系统给出的sendfile系统调用来使用零拷贝。Java中的系统调用给出的是FileChannel.transferTo接口。
-\5. 优秀的文件存储机制
+
+5.优秀的文件存储机制
 如果分区规则设置得合理，那么所有的消息可以均匀地分布到不同的分区中，这样就可以实现水平扩展。不考虑多副本的情况，一个分区对应一个日志（Log）。为了防止 Log 过大，Kafka 又引入了日志分段（LogSegment）的概念，将 Log 切分为多个 LogSegment，相当于一个巨型文件被平均分配为多个相对较小的文件，这样也便于消息的维护和清理。
 
 ![img](images/1204119-20191222130134593-2014786608.png)
