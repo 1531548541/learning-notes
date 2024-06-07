@@ -852,6 +852,69 @@ kafka-perferred-replica-election.sh 脚本提供了对分区 leader 副本（全
 
 > 
 
+# 消息丢失解决
+
+1. 使用producer.send(msg,callback)。
+2. 设置acks = all。acks是Producer的参数，代表了所有副本Broker都要接收到消息，该消息才算是“已提交”。
+3. 设置retries为一个较大的值。是Producer的参数，对应Producer自动重试。如果出现网络抖动，那么可以自动重试消息发送，避免消息丢失。
+4. unclean.leader.election.enable = false。控制有哪些Broker有资格竞选分区的Leader。表示不允许落后太多的Broker竞选Leader。
+5. 设置replication.factor>=3。Broker参数，冗余Broker。
+6. 设置min.insync.replicas>1。Broker参数。控制消息至少要被写入到多少个副本才算是“已提交”。
+7. 确保replication.factor>min.insync.replicas。如果两个相等，那么只要有一个副本挂机，整个分区就无法正常工作了。推荐设置成replication.factor=min.insync.replicas+1.
+8. 确保消息消费完成在提交。Consumer端参数enbale.auto.commit，设置成false，手动提交位移。
+
+解释第二条和第六条：
+如果ISR中只有1个副本了，acks=all也就相当于acks=1了，引入min.insync.replicas的目的就是为了做一个下限的限制：不能只满足于ISR全部写入，还要保证ISR中的写入个数不少于min.insync.replicas。
+
+# 幂等性
+
+在0.11.0.0版本引入了创建幂等性Producer的功能。仅需要设置props.put(“enable.idempotence”，true)，或props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG,true)。
+
+enable.idempotence设置成true后，Producer自动升级成幂等性Producer。Kafka会自动去重。Broker会多保存一些字段。当Producer发送了相同字段值的消息后，Broker能够自动知晓这些消息已经重复了。
+
+作用范围：
+
+1. 只能保证单分区上的幂等性，即一个幂等性Producer能够保证某个主题的一个分区上不出现重复消息。
+2. 只能实现单会话上的幂等性，这里的会话指的是Producer进程的一次运行。当重启了Producer进程之后，幂等性不保证。
+
+# 事务
+
+Kafka在0.11版本开始提供对事务的支持，提供是read committed隔离级别的事务。保证多条消息原子性地写入到目标分区，同时也能保证Consumer只能看到事务成功提交的消息。
+
+## Producer
+
+保证多条消息原子性地写入到多个分区中。这批消息要么全部成功，要不全部失败。事务性Producer也不惧进程重启。
+
+Producer端的设置：
+
+1. 开启`enable.idempotence = true`
+2. 设置Producer端参数 `transactional.id`
+
+除此之外，还要加上调用事务API，如initTransaction、beginTransaction、commitTransaction和abortTransaction，分别应对事务的初始化、事务开始、事务提交以及事务终止。
+如下：
+
+```java
+Copyproducer.initTransactions();
+try {
+            producer.beginTransaction();
+            producer.send(record1);
+            producer.send(record2);
+            producer.commitTransaction();
+} catch (KafkaException e) {
+            producer.abortTransaction();
+}
+```
+
+这段代码能保证record1和record2被当做一个事务同一提交到Kafka，要么全部成功，要么全部写入失败。
+
+## Consumer
+
+Consumer端的设置：
+设置isolation.level参数，目前有两个取值：
+
+1. read_uncommitted:默认值表明Consumer端无论事务型Producer提交事务还是终止事务，其写入的消息都可以读取。
+2. read_committed:表明Consumer只会读取事务型Producer成功提交事务写入的消息。注意，非事务型Producer写入的所有消息都能看到。
+
 # 常用命令
 
 ~~~shell
@@ -860,7 +923,7 @@ kafka-topics.sh --create --bootstrap-server node01:9092 --topic zfc --partitions
 #创建生产者
 kafka-console-producer.sh --bootstrap-server node01:9092 --topic first
 #创建消费者
-kafka-console-consumer.sh --bootstrap-server node01:9092 --topic first
+kafka-console-consumer.sh --bootstrap-server node01:9092 --topic first --from-beginning
 #查看分区、副本、isr信息
 kafka-topics.sh --bootstrap-server node01:9092 --describe --topic wujie
 #查看所有分区
