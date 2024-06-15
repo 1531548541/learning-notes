@@ -1,0 +1,7 @@
+# Default ignored files
+*.class
+*.jar
+*.iml
+.idea/
+.vscode/
+target/
