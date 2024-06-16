@@ -670,7 +670,42 @@ t.start();
 
 ***
 
+### 线程中断
 
+#### volite
+
+利用其可见性
+
+#### AtomicBoolean
+
+利用其可见性
+
+#### 中断方法
+
+
+
+### 等待&唤醒
+
+#### wait&notify
+
+- 必须用在同步代码块或同步方法中，否则抛异常 IllegalMonitorStateException
+- 先wait后notify
+
+#### Condition中的await&signal
+
+- 必须在lock和unlock中，否则抛异常 IllegalMonitorStateException
+- 先await后signal
+
+#### LockSupport中的pack&unpack
+
+> LockSupport使用了一种Permit（许可证）的概念来做到阻塞和唤醒，每个线程都有一个许可证，permit只有两个值0和1，默认是0。unpack时，permit=1，唤醒后permit=0。
+>
+> 可以把许可证看成是一种（0,1）信号量，但和Semaphore不同的是，许可的累加上线是1
+
+- 可以不在同步代码块或同步方法中
+- pack和unpack没有先后
+- 注意点：permit最多=1![image-20240616141720149](images/image-20240616141720149.png)
+- 冷知识：除了unpack可以唤醒，intercept方法也可以唤醒pack。
 
 ### 查看线程
 
@@ -954,6 +989,12 @@ public static void main(String[] args) {
 Monitor 被翻译为监视器或管程
 
 每个 Java 对象都可以关联一个 Monitor 对象，Monitor 也是 class，其**实例存储在堆中**，如果使用 synchronized 给对象上锁（重量级）之后，该对象头的 Mark Word 中就被设置指向 Monitor 对象的指针，这就是重量级锁
+
+ObjectMonitor.cpp源码如下：
+
+![image-20240616130413144](images/image-20240616130413144.png)
+
+![image-20240616130507168](images/image-20240616130507168.png)
 
 * Mark Word 结构：
 
@@ -2220,21 +2261,13 @@ public static void main(String[] args) {
 
 
 
-
-
-****
-
-
-
-
-
 ## 内存
 
 ### JMM
 
 #### 内存模型
 
-Java 内存模型是 Java Memory Model（JMM），本身是一种**抽象的概念**，实际上并不存在，描述的是一组规则或规范，通过这组规范定义了程序中各个变量（包括实例字段，静态字段和构成数组对象的元素）的访问方式
+Java 内存模型是 Java Memory Model（JMM），本身是一种**抽象的概念**，实际上并不存在，描述的是一组规则或规范，通过这组规范定义了程序中各个变量（包括实例字段，静态字段和构成数组对象的元素）的访问方式。JMM关键技术都是围绕`有序性、原子性、可见性`展开的。
 
 JMM 作用：
 
@@ -2263,9 +2296,11 @@ JMM 作用：
 
 #### 内存交互
 
-Java 内存模型定义了 8 个操作来完成主内存和工作内存的交互操作：
+Java 内存模型定义了 8 个操作来完成主内存和工作内存的原子操作：
 
-<img src="images/JMM-内存交互.png" style="zoom: 67%;" />
+![image-20240616185133449](images/image-20240616185133449.png)
+
+![image-20240616184607441](images/image-20240616184607441.png)
 
 * lock：将一个变量标识为被一个线程**独占状态**
 * unclock：将一个变量从独占状态释放出来，释放后的变量才可以被其他线程锁定
@@ -2276,15 +2311,11 @@ Java 内存模型定义了 8 个操作来完成主内存和工作内存的交互
 * store：把工作内存的一个变量的值传送到主内存中
 * write：在 store 之后执行，把 store 得到的值放入主内存的变量中
 
+![image-20240616184744038](images/image-20240616184744038.png)
 
+volatile不保证原子性，是发生在use和assign之间。
 
-参考文章：https://github.com/CyC2018/CS-Notes/blob/master/notes/Java%20%E5%B9%B6%E5%8F%91.md
-
-
-
-***
-
-
+![image-20240616190440384](images/image-20240616190440384.png)
 
 #### 三大特性
 
@@ -2500,13 +2531,6 @@ volatile 是 Java 虚拟机提供的**轻量级**的同步机制（三大特性�
 
 性能：volatile 修饰的变量进行读操作与普通变量几乎没什么差别，但是写操作相对慢一些，因为需要在本地代码中插入很多内存屏障来保证指令不会发生乱序执行，但是开销比锁要小
 
-
-
-
-***
-
-
-
 #### 解决重排
 
 **volatile 修饰的变量，可以禁用指令重排**
@@ -2572,6 +2596,24 @@ volatile 是 Java 虚拟机提供的**轻量级**的同步机制（三大特性�
 使用 volatile 修饰的共享变量，总线会开启 **CPU 总线嗅探机制**来解决 JMM 缓存一致性问题，也就是共享变量在多线程中可见性的问题，实现 MESI 缓存一致性协议
 
 底层是通过汇编 lock 前缀指令，共享变量加了 lock 前缀指令，在线程修改完共享变量后，会马上执行 store 和 write 操作。在执行 store 操作前，会先执行**缓存锁定**的操作然后写回主存，其他的 CPU 上运行的线程根据 CPU 总线嗅探机制会修改其共享变量为失效状态，读取时会重新从主内存中读取最新的数据
+
+#### 四大内存屏障
+
+![image-20240616152259177](images/image-20240616152259177.png)
+
+![image-20240616153023940](images/image-20240616153023940.png)
+
+1.在每个volatile写操作的前面插入一个StoreStore屏障
+
+2.在每个volatile写操作的后面插入一个StoreLoad屏障
+
+![image-20240616153511197](images/image-20240616153511197.png)
+
+3.在每个volatile读操作的后面插入一个LoadLoad屏障
+
+4.在每个volatile读操作的后面插入一个LoadStore屏障
+
+![image-20240616153651772](images/image-20240616153651772.png)
 
 lock 前缀指令就相当于内存屏障，Memory Barrier（Memory Fence）
 
@@ -2641,11 +2683,11 @@ lock 前缀指令就相当于内存屏障，Memory Barrier（Memory Fence）
 
   <img src="images/JMM-volatile不能保证原子性.png" style="zoom:67%;" />
 
+#### 例子巩固理解
 
+![image-20240616191431135](images/image-20240616191431135.png)
 
-***
-
-
+![image-20240616191736179](images/image-20240616191736179.png)
 
 #### 双端检锁
 
@@ -2685,12 +2727,6 @@ public final class Singleton {
 * 懒惰初始化
 * 首次使用 getInstance() 才使用 synchronized 加锁，后续使用时无需加锁
 * 第一个 if 使用了 INSTANCE 变量，是在同步块之外，但在多线程环境下会产生问题
-
-
-
-***
-
-
 
 ##### DCL问题
 
@@ -2733,12 +2769,6 @@ getInstance 方法对应的字节码为：
 
 ![](images/JMM-DCL出现的问题.png)
 
-
-
-***
-
-
-
 ##### 解决方法
 
 指令重排只会保证串行语义的执行一致性（单线程），但并不会关系多线程间的语义一致性
@@ -2751,11 +2781,11 @@ private static volatile SingletonDemo INSTANCE = null;
 
 
 
-***
+#### 静态内部类实现不用volatile实现单例
 
+![image-20240616205848454](images/image-20240616205848454.png)
 
-
-### ha-be
+### happens-before
 
 happens-before 先行发生
 
@@ -2950,9 +2980,47 @@ CAS 与 synchronized 总结：
 
 
 
+#### ABA
+
+ABA 问题：当进行获取主内存值时，该内存值在写入主内存时已经被修改了 N 次，但是最终又改成原来的值
+
+其他线程先把 A 改成 B 又改回 A，主线程**仅能判断出共享变量的值与最初值 A 是否相同**，不能感知到这种从 A 改为 B 又 改回 A 的情况，这时 CAS 虽然成功，但是过程存在问题
+
+* 构造方法：
+  * `public AtomicStampedReference(V initialRef, int initialStamp)`：初始值和初始版本号
+
+* 常用API：
+  * ` public boolean compareAndSet(V expectedReference, V newReference, int expectedStamp, int newStamp)`：期望引用和期望版本号都一致才进行 CAS 修改数据
+  * `public void set(V newReference, int newStamp)`：设置值和版本号
+  * `public V getReference()`：返回引用的值
+  * `public int getStamp()`：返回当前版本号
+
+```java
+public static void main(String[] args) {
+    AtomicStampedReference<Integer> atomicReference = new AtomicStampedReference<>(100,1);
+    int startStamp = atomicReference.getStamp();
+    new Thread(() ->{
+        int stamp = atomicReference.getStamp();
+        atomicReference.compareAndSet(100, 101, stamp, stamp + 1);
+        stamp = atomicReference.getStamp();
+        atomicReference.compareAndSet(101, 100, stamp, stamp + 1);
+    },"t1").start();
+
+    new Thread(() ->{
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        if (!atomicReference.compareAndSet(100, 200, startStamp, startStamp + 1)) {
+            System.out.println(atomicReference.getReference());//100
+            System.out.println(Thread.currentThread().getName() + "线程修改失败");
+        }
+    },"t2").start();
+}
+```
 
 
-***
 
 
 
@@ -3087,7 +3155,7 @@ CAS 算法：有 3 个操作数（内存值 V， 旧的预期值 A，要修改�
 
 原子引用：对 Object 进行原子操作，提供一种读和写都是原子性的对象引用变量
 
-原子引用类：AtomicReference、AtomicStampedReference、AtomicMarkableReference
+原子引用类：AtomicReference、AtomicStampedReference（versionNum）、AtomicMarkableReference（true false）
 
 AtomicReference 类：
 
@@ -3159,7 +3227,7 @@ public final boolean compareAndSet(int i, int expect, int update) {
 
 原子更新器类：AtomicReferenceFieldUpdater、AtomicIntegerFieldUpdater、AtomicLongFieldUpdater
 
-利用字段更新器，可以针对对象的某个域（Field）进行原子操作，只能配合 volatile 修饰的字段使用，否则会出现异常 `IllegalArgumentException: Must be volatile type`
+利用字段更新器，可以针对对象的某个字段进行原子操作，只能配合 volatile 修饰的字段使用，否则会出现异常 `IllegalArgumentException: Must be volatile type`
 
 常用 API：
 
@@ -3202,7 +3270,7 @@ LongAdder 和 LongAccumulator 区别：
 * 调用 casBase 时，LongAccumulator 使用 function.applyAsLong(b = base, x) 来计算，LongAddr 使用 casBase(b = base, b + x) 
 * LongAccumulator 类功能更加强大，构造方法参数中
 
-  * accumulatorFunction 是一个双目运算器接口，可以指定累加规则，比如累加或者相乘，其根据输入的两个参数返回一个计算值，LongAdder 内置累加规则
+  * accumulatorFunction 是一个双目运算器接口，可以指定累加规则，比如累加或者相乘，其根据输入的两个参数返回一个计算值。而LongAdder 只能累加
   * identity 则是 LongAccumulator 累加器的初始值，LongAccumulator 可以为累加器提供非0的初始值，而 LongAdder 只能提供默认的 0
 
 
@@ -3460,60 +3528,6 @@ transient volatile int cellsBusy;
 
   
 
-
-
-***
-
-
-
-### ABA
-
-ABA 问题：当进行获取主内存值时，该内存值在写入主内存时已经被修改了 N 次，但是最终又改成原来的值
-
-其他线程先把 A 改成 B 又改回 A，主线程**仅能判断出共享变量的值与最初值 A 是否相同**，不能感知到这种从 A 改为 B 又 改回 A 的情况，这时 CAS 虽然成功，但是过程存在问题
-
-* 构造方法：
-  * `public AtomicStampedReference(V initialRef, int initialStamp)`：初始值和初始版本号
-
-* 常用API：
-  * ` public boolean compareAndSet(V expectedReference, V newReference, int expectedStamp, int newStamp)`：期望引用和期望版本号都一致才进行 CAS 修改数据
-  * `public void set(V newReference, int newStamp)`：设置值和版本号
-  * `public V getReference()`：返回引用的值
-  * `public int getStamp()`：返回当前版本号
-
-```java
-public static void main(String[] args) {
-    AtomicStampedReference<Integer> atomicReference = new AtomicStampedReference<>(100,1);
-    int startStamp = atomicReference.getStamp();
-    new Thread(() ->{
-        int stamp = atomicReference.getStamp();
-        atomicReference.compareAndSet(100, 101, stamp, stamp + 1);
-        stamp = atomicReference.getStamp();
-        atomicReference.compareAndSet(101, 100, stamp, stamp + 1);
-    },"t1").start();
-
-    new Thread(() ->{
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        if (!atomicReference.compareAndSet(100, 200, startStamp, startStamp + 1)) {
-            System.out.println(atomicReference.getReference());//100
-            System.out.println(Thread.currentThread().getName() + "线程修改失败");
-        }
-    },"t2").start();
-}
-```
-
-
-
-
-
-***
-
-
-
 ### Unsafe
 
 Unsafe 是 CAS 的核心类，由于 Java 无法直接访问底层系统，需要通过本地（Native）方法来访问
@@ -3573,9 +3587,45 @@ class MyAtomicInteger {
 
 
 
-***
+### 自旋锁
 
+~~~java
+public class SpinLockDemo {
+    AtomicReference<Thread> atomicReference = new AtomicReference<>();
 
+    public void MyLock() {
+        System.out.println(Thread.currentThread().getName() + "\t" + "---come in");
+        while (!atomicReference.compareAndSet(null, Thread.currentThread())) {
+
+        }
+        System.out.println(Thread.currentThread().getName() + "\t" + "---持有锁成功");
+    }
+
+    public void MyUnLock() {
+        atomicReference.compareAndSet(Thread.currentThread(), null);
+        System.out.println(Thread.currentThread().getName() + "\t" + "---释放锁成功");
+    }
+
+    public static void main(String[] args) {
+        SpinLockDemo spinLockDemo = new SpinLockDemo();
+
+        new Thread(() -> {
+            spinLockDemo.MyLock();
+            try {
+                TimeUnit.SECONDS.sleep(5);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            spinLockDemo.MyUnLock();
+        }, "t1").start();
+
+        new Thread(() -> {
+            spinLockDemo.MyLock();
+            spinLockDemo.MyUnLock();
+        }, "t2").start();
+    }
+}
+~~~
 
 ### final
 
