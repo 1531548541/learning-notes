@@ -175,17 +175,15 @@ JDBC是个人作战，凡事亲力亲为，低效而高险，自己加载驱动�
 >
 > 如果需要配置多套数据库环境，那需要做一些拓展，例如Mybatis中通过environments等配置就可以支持多套测试/生产数据库环境进行切换。
 
- 
-
- 
-
 #### **项目使用端：**
 
 （1）调用框架API，除了引入自定义持久层框架的jar包
 
-（2）提供两部分配置信息：1.sqlMapConfig.xml : 数据库配置信息（地址/数据名/用户名/密码），以及mapper.xml的全路径
+（2）提供两部分配置信息：
 
-​                                                2.mapper.xml : SQL配置信息，存放SQL语句、参数类型、返回值类型相关信息
+​			1.sqlMapConfig.xml : 数据库配置信息（地址/数据名/用户名/密码），以及mapper.xml的全路径
+
+​			2.mapper.xml : SQL配置信息，存放SQL语句、参数类型、返回值类型相关信息
 
  
 
@@ -393,9 +391,8 @@ public class Resources {
         InputStream resourceAsStream = Resources.class.getClassLoader().getResourceAsStream(path);
         return resourceAsStream;
     }
+}
 ```
-
- 
 
 Configuration
 
@@ -494,8 +491,6 @@ public class MappedStatement {
 }
 ```
 
- 
-
 SqlSessionFactoryBuilder
 
 ```java
@@ -517,7 +512,7 @@ public class SqlSessionFactoryBuilder {
 }
 ```
 
-XMLConfigerBuilder
+XMLConfigBuilder
 
 ```java
 public class XMLConfigBuilder {
@@ -751,21 +746,21 @@ public class SimpleExecutor implements Executor {
          // 问题2：该把对象中的哪一个属性赋值给哪一个占位符呢？
         List<ParameterMapping> parameterMappings = boundSql.getParameterMappings();
         if(parameterMappings.size() > 0){
-        // com.itheima.pojo.User
-        String parameterType = mappedStatement.getParameterType();
-        Class<?> parameterTypeClass = Class.forName(parameterType);
+            // com.itheima.pojo.User
+            String parameterType = mappedStatement.getParameterType();
+            Class<?> parameterTypeClass = Class.forName(parameterType);
 
-        for (int i = 0; i < parameterMappings.size(); i++) {
-            ParameterMapping parameterMapping = parameterMappings.get(i);
-            // id
-            String content = parameterMapping.getContent();
-            // 反射
-            Field declaredField = parameterTypeClass.getDeclaredField(content);
-            // 暴力访问
-            declaredField.setAccessible(true);
-            Object value = declaredField.get(params);
-            preparedStatement.setObject(i+1 ,value);
-        }
+            for (int i = 0; i < parameterMappings.size(); i++) {
+                ParameterMapping parameterMapping = parameterMappings.get(i);
+                // id
+                String content = parameterMapping.getContent();
+                // 反射
+                Field declaredField = parameterTypeClass.getDeclaredField(content);
+                // 暴力访问
+                declaredField.setAccessible(true);
+                Object value = declaredField.get(params);
+                preparedStatement.setObject(i+1 ,value);
+            }
         }
 
         // 4.执行sql,发起查询
@@ -779,8 +774,7 @@ public class SimpleExecutor implements Executor {
             // 元数据信息中包含了字段名 字段的值
             ResultSetMetaData metaData = resultSet.getMetaData();
             Object obj = resultTypeClass.newInstance();
-            for (int i = 1; i <= metaData.getColumnCount() ; i++) {
-
+            for (int i = 1; i <= metaData.getColumnCount(); i++) {
                 // id  username
                 String columnName = metaData.getColumnName(i);
                 Object value = resultSet.getObject(columnName);
