@@ -8111,11 +8111,36 @@ class MyLock implements Lock {
 
 
 
+#### 聊聊AQS整个过程
 
+关键词：CLH（虚拟双端链表，里面包含Node，Node里有waitStatus、pre、next、thread）、state、cas
 
-***
+以非公平为例：
 
+【入队-调用lock】
 
+第一个Node入队使用cas将state从0更新成1，成功，设置其为exclusiveOwnerThread。第二个Node也尝试更新state，失败了，判断head是null，则增加个傀儡节点占位，head和tail分别指向它，还会再尝试更新state，失败则在傀儡节点后新增个node，把前一个节点的waitState（默认0）更新成-1（Signal），同时调用LockSupport.park(a)。后面的依次。
+
+【出队-调用unlock】
+
+需要unlock的线程使用cas将state--，直到减到0。由于是非公平，此时新来的线程也可能直接抢到锁，两种情况：1.新线程cas将state从0减到1，成功，设置其为exclusiveOwnerThread。2.unlock执行过程中，队列中线程unpark后抢到锁，傀儡节点出队，将傀儡节点下一个节点变成傀儡节点。
+
+#### 公平与非公平
+
+非公平调用lock方法时，会先尝试更新state。而公平调用lock直接访问acquire(1)方法，acquire(1)比非公平多个hasQueuedPredecessors()判断，确保按队列顺序。
+
+~~~java
+public final boolean hasQueuedPredecessors() {
+    // The correctness of this depends on head being initialized
+    // before tail and on head.next being accurate if the current
+    // thread is first in queue.
+    Node t = tail; // Read fields in reverse initialization order
+    Node h = head;
+    Node s;
+    return h != t &&
+        ((s = h.next) == null || s.thread != Thread.currentThread());
+}
+~~~
 
 ### Re-Lock
 
@@ -9371,6 +9396,8 @@ ReentrantReadWriteLock 其**读锁是共享锁，写锁是独占锁**
 * 读-读能共存、读-写不能共存、写-写不能共存
 
 * 读锁不支持条件变量
+
+* 锁饥饿：写锁可能长期获取不到
 
 * **重入时升级不支持**：持有读锁的情况下去获取写锁会导致获取写锁永久等待，需要先释放读，再去获得写
 
