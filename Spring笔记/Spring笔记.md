@@ -12,7 +12,7 @@ Spring框架是一个分层架构，他包含一系列的功能要素，并被�
 
 Spring是面向Bean的编程（BOP：Bean Oriented Programming），Bean在Spring中才是真正的主角。Bean在Spring中作用就像Object对OOP的意义一样，没有对象的概念就像没有面向对象编程，Spring中没有Bean也就没有Spring存在的意义。Spring提供了IoC 容器通过配置文件或者注解的方式来管理对象之间的依赖关系。
 
-控制反转（Inversion of Control，缩写为IoC），是面向对象编程中的一种设计原则，可以用来减低代码之间的耦合度。其中最常见的方式叫做依赖注入（Dependency Injection，简称DI），还有一种方式叫“依赖查找”（Dependency Lookup）。通过控制反转，对象在被创建的时候，由一个调控系统内所有对象的外界实体，将其所依赖的对象的引用传递给它。
+控制反转（Inversion of Control，缩写为IoC），是面向对象编程中的一种设计原则，可以用来减低代码之间的耦合度。`其中最常见的方式叫做依赖注入（Dependency Injection，简称DI），还有一种方式叫“依赖查找”（Dependency Lookup）`。通过控制反转，对象在被创建的时候，由一个调控系统内所有对象的外界实体，将其所依赖的对象的引用传递给它。
 
  
 
@@ -185,7 +185,7 @@ Bean 生命周期的整个执行过程描述如下。
 
 9）如果 BeanPostProcessor 和 Bean 关联，则 Spring 将调用该接口的初始化方法 postProcessAfterInitialization()。此时，Bean 已经可以被应用系统使用了。
 
-10）如果在  中指定了该 Bean 的作用范围为 scope="singleton"，则将该 Bean 放入 Spring IoC 的缓存池中，将触发 Spring 对该 Bean 的生命周期管理；如果在  中指定了该 Bean 的作用范围为 scope="prototype"，则将该 Bean 交给调用者，调用者管理该 Bean 的生命周期，Spring 不再管理该 Bean。
+10）如果指定了该 Bean 的作用范围为 scope="singleton"，则将该 Bean 放入 Spring IoC 的缓存池中，将触发 Spring 对该 Bean 的生命周期管理；如果scope="prototype"，则将该 Bean 交给调用者，调用者管理该 Bean 的生命周期，Spring 不再管理该 Bean。
 
 11）如果 Bean 实现了 DisposableBean 接口，则 Spring 会调用 destory() 方法将 Spring 中的 Bean 销毁；如果在配置文件中通过 destory-method 属性指定了 Bean 的销毁方法，则 Spring 将调用该方法。
 
@@ -386,7 +386,7 @@ dependencies {
 
 1. 编写TestBean
 
-```
+```java
 @Component
 public class TestBean {
 
@@ -401,7 +401,7 @@ public class TestBean {
 
 1. 创建applicationContext.xml，配置TestBean
 
-```
+```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <beans xmlns="http://www.springframework.org/schema/beans"
       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -417,7 +417,7 @@ public class TestBean {
 
 1. 编写测试类IOCTest
 
-```
+```java
 public class IOCTest {
 
     public static void main(String[] args) {
@@ -1295,7 +1295,7 @@ private void parseDefaultElement(Element ele, BeanDefinitionParserDelegate deleg
 
  
 
-可以看到默认命名空间的一级节点只有4种：import、alias、bean、beans。这4种节点中，最重要、最复杂的就是  节点，重点介绍  节点的处理，理解了  节点后，其他的都不难理解。
+可以看到默认命名空间的一级节点只有4种：import、alias、bean、beans。这4种节点中，最重要、最复杂的就是  bean节点，重点介绍  节点的处理，理解了bean节点后，其他的都不难理解。
 
 另外， 节点只是递归调用之前的 doRegisterBeanDefinitions 方法，因此无需再介绍。
 
@@ -1987,8 +1987,8 @@ protected void prepareBeanFactory(ConfigurableListableBeanFactory beanFactory) {
 此处为空方法，如果子类需要，自己去实现
 
 ```java
-    protected void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) {
-    }
+protected void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) {
+}
 ```
 
  
@@ -2090,7 +2090,7 @@ protected void invokeBeanFactoryPostProcessors(ConfigurableListableBeanFactory b
 }
 ```
 
-- 1. 拿到当前应用上下文 beanFactoryPostProcessors 变量中的值，**见代码块1详解**。
+- 1.拿到当前应用上下文 beanFactoryPostProcessors 变量中的值，**见代码块1详解**。
 - 2.实例化并调用所有已注册的 BeanFactoryPostProcessor，**见代码块2详解**。
 
  
@@ -2404,7 +2404,12 @@ private static void sortPostProcessors(List<?> postProcessors, ConfigurableLista
 #### 方法总结
 
 - 整个 invokeBeanFactoryPostProcessors 方法围绕两个接口，**BeanDefinitionRegistryPostProcessor 和 BeanFactoryPostProcessor**，其中 BeanDefinitionRegistryPostProcessor 继承了 BeanFactoryPostProcessor 。
+
 - BeanDefinitionRegistryPostProcessor 主要用来在常规 BeanFactoryPostProcessor 检测开始之前注册其他 Bean 定义，说的简单点，就是 BeanDefinitionRegistryPostProcessor 具有更高的优先级，执行顺序在 BeanFactoryPostProcessor 之前。
+
+  `1）优先调用BeanDefinitionRegistryPostProcessor实现类，按实现PriorityOrdered接口、Ordered接口、啥也没实现，三种情况排序执行其postProcessBeanDefinitionRegistry方法`
+  `2）调用BeanFactoryPostProcessor实现类，按实现PriorityOrdered接口、Ordered接口、啥也没实现，三种情况排序执行其postProcessBeanFactory方法`
+
 - 该方法就是完成了实例化并调用了所有的BeanFactoryPostProcessor
 
  
@@ -2717,15 +2722,11 @@ initMessageSource();
 
 #### 方法概述
 
-初始化应用的事件广播器 ApplicationEventMulticaster。
-
- 
+初始化应用的事件广播器 ApplicationEventMulticaster。就是往factory加了个single bean。
 
 **什么是 Spring 事件？**
 
-![image-20211014114334305](images/image-20211014114334305.png)
-
- 
+![image-20240629235829024](images/image-20240629235829024.png)
 
 这块的介绍在官网 1.15.2. Standard and Custom Events[1] 部分有介绍。
 
@@ -2813,7 +2814,7 @@ protected void initApplicationEventMulticaster() {
 
 #### 源码剖析
 
-```
+```java
     protected void onRefresh() throws BeansException {
         // For subclasses: do nothing by default.
     }
