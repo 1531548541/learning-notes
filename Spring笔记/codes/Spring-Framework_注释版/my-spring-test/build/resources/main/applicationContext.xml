@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:mvc="http://www.springframework.org/schema/tool"
+	   xmlns:context="http://www.springframework.org/schema/context"
+	   xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+	    http://www.springframework.org/schema/tool http://www.springframework.org/schema/tool/spring-tool.xsd http://www.springframework.org/schema/context https://www.springframework.org/schema/context/spring-context.xsd">
+
+
+
+	<!--用于测试BeanDefinition-->
+	<bean  id="testBean"   class="com.itheima.config.TestBean" init-method="testBeanInit" scope="singleton" lazy-init="false" >
+		<property name="name" value="zimu"/>
+ 	</bean>
+
+
+
+
+	<!--后置处理器-->
+	<bean id="beanDefinitionRegistryPostProcessor" class="com.itheima.config.TestBeanDefinitionRegistryPostProcessor"/>
+	<bean id="testBeanPostProcessor" class="com.itheima.config.TestBeanPostProcessor" />
+	<bean id="testBeanFactoryPostProcessor" class="com.itheima.config.TestBeanFactoryPostProcessor" />
+
+
+
+</beans>
