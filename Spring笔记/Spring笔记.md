@@ -3730,7 +3730,7 @@ inCreationCheckExclusions 是要在创建检查排除掉的 beanName 集合，�
 
 **为什么无法解决构造器循环依赖？**
 
-- 在finishBeanFactoryInitialization详解 中的代码块7提过，getSingleton 方法是解决循环引用的核心代码。
+- 在finishBeanFactoryInitialization详解中的代码块7提过，getSingleton 方法是解决循环引用的核心代码。
 - 解决逻辑的第一句话：**“我们先用构造函数创建一个 “不完整” 的 bean 实例”**，从这句话可以看出，构造器循环依赖是无法解决的，因为当构造器出现循环依赖，我们连 “不完整” 的 bean 实例都构建不出来。
 - Spring 能解决的循环依赖有：通过 setter 注入的循环依赖、通过属性注入的循环依赖。
 

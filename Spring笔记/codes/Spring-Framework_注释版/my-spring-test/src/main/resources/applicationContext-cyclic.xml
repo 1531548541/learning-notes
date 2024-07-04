@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	   xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+
+	<!--testService1通过构造方法注入testService2-->
+<!--	<bean id="testService1_constructor" class="com.itheima.cyclic.TestService1_constructor">
+	<constructor-arg  name="service_2" ref="testService2_constructor"/>
+</bean>
+
+	&lt;!&ndash;testService2通过构造方法注入testService1&ndash;&gt;
+	<bean id="testService2_constructor" class="com.itheima.cyclic.TestService2_constructor">
+		<constructor-arg name="service_1" ref="testService1_constructor"/>
+	</bean>-->
+
+
+	<bean id="testService1" class="com.itheima.cyclic.TestService1" >
+		<property name="testService2" ref="testService2"/>
+	</bean>
+
+	<bean id="testService2" class="com.itheima.cyclic.TestService2">
+		<property name="testService1" ref="testService1" />
+	</bean>
+
+
+
+
+
+
+</beans>
