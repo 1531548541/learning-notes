@@ -5874,8 +5874,6 @@ private static void useClassProxyingIfNecessary(BeanDefinitionRegistry registry,
 
 AnnotationAwareAspectJAutoProxyCreator 实现了几个重要的扩展接口（可能是在父类中实现）：
 
- 
-
 1）实现了 BeanPostProcessor 接口：实现了 postProcessAfterInitialization 方法。
 
 2）实现了 InstantiationAwareBeanPostProcessor 接口：实现了 postProcessBeforeInstantiation 方法。
