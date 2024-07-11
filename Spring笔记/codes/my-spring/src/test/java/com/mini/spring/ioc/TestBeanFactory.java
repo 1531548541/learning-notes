@@ -1,7 +1,8 @@
 package com.mini.spring.ioc;
 
-import com.mini.spring.BeanDefinition;
-import com.mini.spring.BeanFactory;
+import com.mini.spring.beans.factory.config.BeanDefinition;
+import com.mini.spring.beans.factory.BeanFactory;
+import com.mini.spring.beans.factory.support.DefaultListableBeanFactory;
 import org.junit.Test;
 
 /**
@@ -12,9 +13,16 @@ public class TestBeanFactory {
 
     @Test
     public void testBeanFactory() {
-        BeanFactory beanFactory = new BeanFactory();
-        beanFactory.registerBeanDefinition("userService", new BeanDefinition(new UserServiceImpl()));
-        UserServiceImpl userService = (UserServiceImpl) beanFactory.getBean("userService");
+        //1.注册beanDefinition
+        DefaultListableBeanFactory beanFactory = new DefaultListableBeanFactory();
+        String beanName = "userService";
+        beanFactory.registerBeanDefinition(beanName,new BeanDefinition(UserServiceImpl.class));
+        //2.getBean
+        UserServiceImpl userService = (UserServiceImpl) beanFactory.getBean(beanName);
         userService.query();
+
+        //第二次不会创建对象
+        UserServiceImpl userService1 = (UserServiceImpl) beanFactory.getBean(beanName);
+        userService1.query();
     }
 }
