@@ -5,11 +5,17 @@ package com.mini.spring.ioc;
  * @Date: 2024/7/10 21:27
  */
 public class UserServiceImpl {
-    public UserServiceImpl(){
+    private String name;
+
+    public UserServiceImpl() {
         System.out.println("UserServiceImpl");
     }
 
-    public void query(){
-        System.out.println("UserServiceImpl.query");
+    public UserServiceImpl(String name) {
+        this.name = name;
+    }
+
+    public void query() {
+        System.out.println("UserServiceImpl.query:" + this.name);
     }
 }
