@@ -1,4 +1,4 @@
-package com.mini.spring.beans.factory;
+package com.mini.spring.beans;
 
 /**
  * 定义 Bean 异常

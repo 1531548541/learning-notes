@@ -7,6 +7,8 @@ package com.mini.spring.ioc;
 public class UserServiceImpl {
     private String name;
 
+    private UserDao userDao;
+
     public UserServiceImpl() {
         System.out.println("UserServiceImpl");
     }
@@ -17,5 +19,9 @@ public class UserServiceImpl {
 
     public void query() {
         System.out.println("UserServiceImpl.query:" + this.name);
+    }
+
+    public void queryByName(String name) {
+        System.out.println("UserServiceImpl.queryByName:" + userDao.selectByName(name));
     }
 }

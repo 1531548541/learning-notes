@@ -1,5 +1,7 @@
 package com.mini.spring.beans.factory;
 
+import com.mini.spring.beans.BeansException;
+
 /**
  * @Author: wujie
  * @Date: 2024/7/10 21:17
