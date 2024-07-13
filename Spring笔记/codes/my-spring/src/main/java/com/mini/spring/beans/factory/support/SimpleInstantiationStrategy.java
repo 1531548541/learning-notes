@@ -11,7 +11,7 @@ public class SimpleInstantiationStrategy implements InstantiationStrategy {
         Object bean;
         try {
             if (null == constructor) {
-                bean = constructor.newInstance();
+                bean = beanDefinition.getBeanClass().newInstance();
             } else {
                 bean = constructor.newInstance(args);
             }

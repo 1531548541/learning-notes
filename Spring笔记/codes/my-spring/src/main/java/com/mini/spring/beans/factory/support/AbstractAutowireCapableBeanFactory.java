@@ -56,7 +56,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
         Constructor usedConstructor = null;
         for (Constructor constructor : declaredConstructors) {
             //仅简单用长度来匹配，实际还需要考虑参数类型
-            if (null == args || constructor.getParameterTypes().length == args.length) {
+            if (null != args && constructor.getParameterTypes().length == args.length) {
                 usedConstructor = constructor;
                 break;
             }
