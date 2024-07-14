@@ -5,6 +5,7 @@ import com.mini.spring.beans.PropertyValues;
 import com.mini.spring.beans.factory.config.BeanDefinition;
 import com.mini.spring.beans.factory.BeanFactory;
 import com.mini.spring.beans.factory.config.BeanReference;
+import com.mini.spring.beans.factory.context.support.ClassPathXmlApplicationContext;
 import com.mini.spring.beans.factory.support.DefaultListableBeanFactory;
 import com.mini.spring.beans.factory.support.SimpleInstantiationStrategy;
 import com.mini.spring.beans.factory.xml.XmlBeanDefinitionReader;
@@ -44,6 +45,14 @@ public class TestBeanFactory {
         xmlBeanDefinitionReader.loadBeanDefinitions("classpath:beans.xml");
         String beanName = "userService";
         UserServiceImpl userService = beanFactory.getBean(beanName, UserServiceImpl.class);
+        userService.queryByName("xiaowang");
+        userService.query();
+    }
+
+    @Test
+    public void testByContext(){
+        ClassPathXmlApplicationContext applicationContext = new ClassPathXmlApplicationContext("classpath:beans.xml");
+        UserServiceImpl userService = applicationContext.getBean("userService", UserServiceImpl.class);
         userService.queryByName("xiaowang");
         userService.query();
     }

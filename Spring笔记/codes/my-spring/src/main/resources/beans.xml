@@ -3,6 +3,11 @@
 
     <bean id="userService" class="com.mini.spring.ioc.UserServiceImpl">
         <property name="name" value="xx"></property>
+        <property name="company" value="腾讯"/>
+        <property name="location" value="深圳"/>
         <property name="userDao" ref="userDao"></property>
     </bean>
+
+    <bean class="com.mini.spring.ioc.MyBeanPostProcessor"></bean>
+    <bean class="com.mini.spring.ioc.MyBeanFactoryPostProcessor"></bean>
 </beans>
