@@ -412,3 +412,16 @@ passwd root
 如果输入的密码太简单，会提示警告（BAD PASSWORD：Thepassword fails the dictionary check - it is too simplistic/systematic），可以无视它，继续输入密码，不过建议还是设置比较复杂一些的密码，以保证安全性
 
 ![img](images/897a734efe5e463196ac2acd5f384515.png)
+
+4、输入命令
+
+~~~bash
+#用以告知系统重新扫描文件
+
+touch ./autorelabel
+
+#重启机器
+
+exec /sbin/init
+~~~
+
