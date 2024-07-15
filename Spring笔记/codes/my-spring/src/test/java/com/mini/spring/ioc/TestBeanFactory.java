@@ -5,8 +5,10 @@ import com.mini.spring.beans.PropertyValues;
 import com.mini.spring.beans.factory.config.BeanDefinition;
 import com.mini.spring.beans.factory.BeanFactory;
 import com.mini.spring.beans.factory.config.BeanReference;
+import com.mini.spring.beans.factory.context.support.ClassPathXmlApplicationContext;
 import com.mini.spring.beans.factory.support.DefaultListableBeanFactory;
 import com.mini.spring.beans.factory.support.SimpleInstantiationStrategy;
+import com.mini.spring.beans.factory.xml.XmlBeanDefinitionReader;
 import org.junit.Test;
 
 /**
@@ -31,6 +33,26 @@ public class TestBeanFactory {
         beanFactory.setInstantiationStrategy(new SimpleInstantiationStrategy());
         //3.getBean
         UserServiceImpl userService = (UserServiceImpl) beanFactory.getBean(beanName, "zzhdsb");
+        userService.queryByName("xiaowang");
+        userService.query();
+    }
+
+    @Test
+    public void testBeanFactoryByXml() {
+        DefaultListableBeanFactory beanFactory = new DefaultListableBeanFactory();
+        beanFactory.setInstantiationStrategy(new SimpleInstantiationStrategy());
+        XmlBeanDefinitionReader xmlBeanDefinitionReader = new XmlBeanDefinitionReader(beanFactory);
+        xmlBeanDefinitionReader.loadBeanDefinitions("classpath:beans.xml");
+        String beanName = "userService";
+        UserServiceImpl userService = beanFactory.getBean(beanName, UserServiceImpl.class);
+        userService.queryByName("xiaowang");
+        userService.query();
+    }
+
+    @Test
+    public void testByContext(){
+        ClassPathXmlApplicationContext applicationContext = new ClassPathXmlApplicationContext("classpath:beans.xml");
+        UserServiceImpl userService = applicationContext.getBean("userService", UserServiceImpl.class);
         userService.queryByName("xiaowang");
         userService.query();
     }
