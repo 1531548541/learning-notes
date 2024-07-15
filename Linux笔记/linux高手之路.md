@@ -373,3 +373,42 @@ lsof -u username
 lsof -v
 ~~~
 
+# linux系统忘记密码
+
+**一、重启系统，在开机过程中，快速按下键盘上的方向键↑和↓。目的是告知引导程序，我们需要在引导页面选择不同的操作，以便让引导程序暂停。**
+
+*以下是暂停后的界面，可以查看下方的英文可知↑和↓的作用。*
+
+![img](images/6836878f736f43e787ee99ab24b8297f.png)
+
+**二、使用↑和↓将选择行设置为第一行（背景高亮即为选中），按下键盘上的e，进入编辑模式**
+
+![img](images/25a833e7a003471fbee06ba3c05a6108.png)
+
+**三、将光标一直移动到 LANG=en_US.UTF-8 后面，空格，再追加`init=/bin/sh`。这里特别注意，需要写在UTF-8后，保持在同一行，并注意空格。有些虚拟机由于屏幕太小，会自动添加\换行，这个是正常的。**
+
+![img](images/0a751b7005cb4e6d8d5fde8f7585e2a7.png)
+
+**四、按下`CTRL+X`进行引导启动，成功后进入该界面**
+
+![img](images/3f30ce56db064cd5924f9b13cf65b7c5.png)
+
+**五、输入以下命令**
+
+1、挂载根目录
+
+mount -o remount, rw /
+
+![img](images/272d480258eb41598ab826d9ac0cd498.png)
+
+2、选择要修改密码的用户名，这里选择root用户进行修改，可以更换为你要修改的用户
+
+passwd root
+
+![img](images/586e8f82911848c3905a83470af119c5.png)
+
+3、输入2次一样的新密码，注意输入密码的时候屏幕上不会有字符出现。
+
+如果输入的密码太简单，会提示警告（BAD PASSWORD：Thepassword fails the dictionary check - it is too simplistic/systematic），可以无视它，继续输入密码，不过建议还是设置比较复杂一些的密码，以保证安全性
+
+![img](images/897a734efe5e463196ac2acd5f384515.png)
