@@ -375,53 +375,33 @@ lsof -v
 
 # linux系统忘记密码
 
-**一、重启系统，在开机过程中，快速按下键盘上的方向键↑和↓。目的是告知引导程序，我们需要在引导页面选择不同的操作，以便让引导程序暂停。**
+`以CentOS7为例`
 
-*以下是暂停后的界面，可以查看下方的英文可知↑和↓的作用。*
+**1.开机/或者重新启动CentOS系统，然后如图所示，迅速按下'e'**
 
-![img](images/6836878f736f43e787ee99ab24b8297f.png)
+![在这里插入图片描述](images/bd1bdae64b894fc18aa553574a499b46.png)
 
-**二、使用↑和↓将选择行设置为第一行（背景高亮即为选中），按下键盘上的e，进入编辑模式**
+**2.按下'e'之后，进入到了如图所示页面,键盘上下键找到 ro**
 
-![img](images/25a833e7a003471fbee06ba3c05a6108.png)
+将图中的 ro 改为 rw 
 
-**三、将光标一直移动到 LANG=en_US.UTF-8 后面，空格，再追加`init=/bin/sh`。这里特别注意，需要写在UTF-8后，保持在同一行，并注意空格。有些虚拟机由于屏幕太小，会自动添加\换行，这个是正常的。**
+再在 rhgb quiet 后面写上 rd.break  记得注意空格。
 
-![img](images/0a751b7005cb4e6d8d5fde8f7585e2a7.png)
+然后按Ctrl + X 确定
 
-**四、按下`CTRL+X`进行引导启动，成功后进入该界面**
+![在这里插入图片描述](images/a69c614223534393b0b5a413a91e7f8f.png)
 
-![img](images/3f30ce56db064cd5924f9b13cf65b7c5.png)
-
-**五、输入以下命令**
-
-1、挂载根目录
-
-mount -o remount, rw /
-
-![img](images/272d480258eb41598ab826d9ac0cd498.png)
-
-2、选择要修改密码的用户名，这里选择root用户进行修改，可以更换为你要修改的用户
-
-passwd root
-
-![img](images/586e8f82911848c3905a83470af119c5.png)
-
-3、输入2次一样的新密码，注意输入密码的时候屏幕上不会有字符出现。
-
-如果输入的密码太简单，会提示警告（BAD PASSWORD：Thepassword fails the dictionary check - it is too simplistic/systematic），可以无视它，继续输入密码，不过建议还是设置比较复杂一些的密码，以保证安全性
-
-![img](images/897a734efe5e463196ac2acd5f384515.png)
-
-4、输入命令
+3. **然后进入如下界面，依次输入以下命令.....[注意命令之间的空格]**
 
 ~~~bash
-#用以告知系统重新扫描文件
-
-touch ./autorelabel
-
-#重启机器
-
-exec /sbin/init
+mount -o remount,rw /sysroot   # 意思是重新挂载 remount 文件系统，并将其设置为可读写
+chroot /sysroot   # 更改root目录
+echo 123 | password --stdin root  # 给root设置密码为123 
+touch /.autorelabel   # 重新给系统打一下selinux标签
+sync # 同步到系统里
+exit
+exit
 ~~~
+
+![在这里插入图片描述](images/3e0fdc81efc14d79bdc3b3435d3b0585.png)
 
