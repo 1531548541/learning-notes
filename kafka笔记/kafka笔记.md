@@ -924,6 +924,8 @@ kafka-topics.sh --create --bootstrap-server node01:9092 --topic zfc --partitions
 kafka-console-producer.sh --bootstrap-server node01:9092 --topic first
 #创建消费者
 kafka-console-consumer.sh --bootstrap-server node01:9092 --topic first --from-beginning
+#创建消费者（带认证）
+kafka-console-consumer.sh --bootstrap-server node01:9092 --topic first --from-beginning --consumer.config ../config/client_ssl.properties
 #查看分区、副本、isr信息
 kafka-topics.sh --bootstrap-server node01:9092 --describe --topic wujie
 #查看所有分区
@@ -937,6 +939,8 @@ kafka-consumer-groups.sh --bootstrap-server node01:9092 --group wujiea --reset-o
 kafka-consumer-groups.sh --bootstrap-server node01:9092 --group wujiea --reset-offsets --topic wujie -to-earliest --execute
 #移动到指定时间偏移
 kafka-consumer-groups.sh --bootstrap-server node01:9092 --group wujiea --reset-offsets --topic wujie --to-datetime 2020-11-07T00:00:00.000 --execute
+#移动到指定时间偏移（待认证）
+kafka-consumer-groups.sh --bootstrap-server node01:9092 --group wujiea --reset-offsets --topic wujie --to-datetime 2020-11-07T00:00:00.000 --execute --command-config ../config/client_ssl.properties
 ~~~
 
 # 日志存储（TODO）
