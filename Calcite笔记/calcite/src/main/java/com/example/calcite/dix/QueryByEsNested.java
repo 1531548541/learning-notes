@@ -31,7 +31,7 @@ public class QueryByEsNested {
             SchemaPlus rootSchema = calciteConnection.getRootSchema();
             String indexName = "enis-evnt-2024.08";
             Map<String, Object> operand = new HashMap<>();
-            operand.put("hosts", "[\"http://192.168.200.130:9200\"]");
+            operand.put("hosts", "[\"http://140.246.27.127:9200\"]");
 //            operand.put("username", "elastic");
 //            operand.put("password", "Njzf1984!(*$$");
             operand.put("index", indexName);
@@ -43,11 +43,14 @@ public class QueryByEsNested {
                             + " _MAP['file_size']  AS \"file_size\", "
                             + " cast(_MAP['file_md5'] AS varchar(20)) AS \"file_md5\", "
                             + " cast(_MAP['md5'] AS varchar(20)) AS \"md5\", "
-                            + " _MAP['evnt_time'] AS \"evnt_time\", "
+                            + " cast(_MAP['evnt_time'] AS TIMESTAMP) AS \"evnt_time\", "
                             + " _MAP['alert_type'] AS \"alert_type\", "
                             + " _MAP['evnt_rel'] AS \"evnt_rel\", "
-                            + " cast(_MAP['evnt_rel.name'] AS varchar) AS \"evnt_rel_name\", "
-                            + " cast(_MAP['evnt_rel.parent'] AS varchar(20)) AS \"evnt_rel_parent\", "
+                            + " cast(_MAP['evnt_rel.name'] AS varchar(10)) AS \"evnt_rel_name\", "
+                            + " cast(_MAP['evnt_rel.parent'] AS varchar(10)) AS \"evnt_rel_parent\", "
+                            + " _MAP['my_obj'] AS \"my_obj\", "
+                            + " cast(_MAP['my_obj.a'] AS varchar(10)) AS \"a\", "
+                            + " _MAP['my_obj.c'] AS \"c\", "
                             + " cast(_MAP['_id'] AS varchar(20)) AS \"id\" "
                             + " from \"%s\".\"%s\"", indexName, indexName);
 
@@ -56,12 +59,25 @@ public class QueryByEsNested {
                             Arrays.asList(indexName, "enis"), false);
             rootSchema.add("enis", macro);
             statement = calciteConnection.createStatement();
-//            String alertJoinFileSql="select file.*,alert.alert_type,alert.md5 from enis AS file left join enis AS alert on alert.file_md5 =file.md5 where file.evnt_rel='file'";
-            String fileJoinAlertSql="select file.*,alert.alert_type,alert.md5 from enis AS alert left join enis AS file on alert.file_md5 =file.md5 where alert.evnt_rel='alert'";
-//            String querySql="select * from enis where evnt_rel='alert'";
-            //虽可以join，但没有利用es evnt_rel，即dsl语句中的has_parent、has_child（性能？）。join的字段须指定类型 cast as varchar|xxx
-            resultSet = statement.executeQuery(fileJoinAlertSql);
-//            resultSet = statement.executeQuery("select file_md5 from enis where evnt_rel='file' group by file_md5");
+            /**
+             * 查询有告警和文件的数据
+             */
+            String ownJoinSql="select file.*,alert.alert_type,alert.md5 from enis AS file,enis AS alert where alert.file_md5 =file.md5 and file.evnt_rel='file' and alert.evnt_rel='alert'";
+            String alertJoinFileSql="select file.*,alert.alert_type,alert.md5 from enis AS file left join enis AS alert on alert.file_md5 =file.md5 where file.evnt_rel='file' and alert.evnt_rel='alert'";
+            String fileJoinAlertSql="select file.*,alert.alert_type,alert.md5 from enis AS alert left join enis AS file on alert.file_md5 =file.md5 where file.evnt_rel='file' and alert.evnt_rel='alert'";
+            /**
+             * 根据嵌套类型（obj）的字段在where条件中查询
+             * join字段无法在where中条件查询: where evnt_rel_parent ='xxx' 查询不到值。【普通的obj可以】
+             */
+            String querySql="select * from enis where a = 'a'";
+            /**
+             * 查询2024-08-01 ~ 2024-08-15 时间内的文件数.
+             *
+             */
+//            String groupBySql="select evnt_time from enis where evnt_time  BETWEEN '2024-08-01 10:00:00' AND '2024-08-31 10:00:00'";
+            String groupBySql="select count(1) as num from enis where evnt_rel='file' group by md5";
+            //join的字段须指定类型 cast as varchar|xxx
+            resultSet = statement.executeQuery(groupBySql);
             /**
              * 遍历 SQL 执行结果
              */
