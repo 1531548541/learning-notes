@@ -3178,3 +3178,10 @@ http.cors.enabled: true
 http.cors.allow-origin: "*"
 ~~~
 
+# 实战
+
+写es发现报错：[unavailable_shards_exception,reason=[enis-evnt-xxx][0] primary shard is not active Timeout ...]
+
+原因：es分片有问题（可能是节点分配、磁盘等问题）
+
+解决：尝试用命令http://ip:9200/_cluster/reroute?retry_failed=true&pretty进行reroute，不行只能reindex。
