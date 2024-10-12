@@ -733,6 +733,24 @@ POST my_index/_doc/1
 
 ![image-20231017145532339](images/image-20231017145532339.png)
 
+### 指定id和routing
+
+~~~sh
+PUT /wujie/_doc?id=xx
+{
+  "name":"zhangsan"
+}
+~~~
+
+~~~sh
+PUT /wujie/_doc?routing=xx
+{
+  "name":"zhangsan"
+}
+~~~
+
+
+
 ## 查看数据
 
 ~~~json
@@ -778,6 +796,29 @@ PUT /wujie/_doc/1
 ## script
 
 TODO P82
+
+~~~sh
+POST /wujie/_update_by_query
+{  
+  "query":{
+    "match_all": {}
+  },
+  "script": {  
+    "source": """
+      String old = ctx._source.file_size;  
+      if (old != null && old.contains(".")) {  
+        ctx._source.file_size = old.substring(0,old.indexOf("."));
+      }
+    """,  
+    "params": {}
+  }  
+}
+
+###注意：在curl命令中执行，""" 会报错，要改为" 并且里面所有"要转义 ###
+curl -u zf-elastic:Njzf1984\!\(\*\$\$ -H "Content-Type:application/json" -XPOST "http://127.0.0.1:9200/enis-evnt*/_update_by_query?pretty" -d @update_filesize.json
+~~~
+
+![image-20241012101448990](images/image-20241012101448990.png)
 
 ## 多文档
 
