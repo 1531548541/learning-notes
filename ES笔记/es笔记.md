@@ -355,7 +355,10 @@ PUT /zfc1
 POST _reindex
 {
   "source": {
-    "index": "zfc"
+    "index": "zfc",
+    "query":{
+        "match_all":{}
+    }
   },
   "dest": {
     "index": "zfc1"
@@ -363,7 +366,7 @@ POST _reindex
 }
 #3. 删除旧的index
 DELETE zfc
-#4. 设置别名
+#4. 设置别名(或者再反向reindex)
 POST _aliases
 {
   "actions": [
@@ -815,7 +818,7 @@ POST /wujie/_update_by_query
 }
 
 ###注意：在curl命令中执行，""" 会报错，要改为" 并且里面所有"要转义 ###
-curl -u zf-elastic:Njzf1984\!\(\*\$\$ -H "Content-Type:application/json" -XPOST "http://127.0.0.1:9200/enis-evnt*/_update_by_query?pretty" -d @update_filesize.json
+curl -u zf-elastic:1984\!\(\*\$\$ -H "Content-Type:application/json" -XPOST "http://127.0.0.1:9200/enis-evnt*/_update_by_query?pretty" -d @update_filesize.json
 ~~~
 
 ![image-20241012101448990](images/image-20241012101448990.png)
