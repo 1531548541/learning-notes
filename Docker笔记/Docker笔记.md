@@ -1210,6 +1210,31 @@ docker run -d  --log-driver json-file --log-opt max-size=100m --log-opt max-file
 
 ~~~
 
+## 11、Oracle
+
+~~~sh
+# 下载镜像
+docker pull registry.cn-hangzhou.aliyuncs.com/zhuyijun/oracle:19c
+ 
+# 创建文件
+mkdir -p /home/data/oracle/oradata
+ 
+# 授权，不授权会导致后面安装失败
+chmod 777 /home/data/oracle/oradata
+ 
+# 启动容器
+docker run -d \
+-p 1521:1521 -p 5500:5500 \
+-e ORACLE_SID=ORCLCDB \
+-e ORACLE_PDB=ORCLPDB \
+-e ORACLE_PWD=123456 \
+-e ORACLE_EDITION=standard \
+-e ORACLE_CHARACTERSET=AL32UTF8 \
+-v /home/data/oracle/oradata:/opt/oracle/oradata \
+--name oracle \
+registry.cn-hangzhou.aliyuncs.com/zhuyijun/oracle:19c
+~~~
+
 
 
 # 网络和存储原理
