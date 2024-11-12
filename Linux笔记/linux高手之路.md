@@ -580,11 +580,11 @@ shell变量是一种很“弱”的变量，默认情况下，一个变量保存
 
   2)在 Bash中，变量的默认类型都是字符串型，如果要进行数值运算，则必须使用特殊命令。
 
-  3)变量用等号"="连接值，"="左右两侧不能有空格
+  3)`变量用等号"="连接值，"="左右两侧不能有空格`
 
   4)变量值中如果有空格，则需要使用单引号或双引号包含，如 test="hello world!"。双引号括起来的内容"$"和反引号者都拥有特殊含义，而单引号括起来的内容都是普通字符。
 
-  5)在变量值中，可以使用转义符"\"。
+  5)在变量值中，可以使用转义符 \。
 
   6)不能使用bash里的关键字(可用help命令查看保留关键字)。
 
@@ -597,7 +597,7 @@ shell变量是一种很“弱”的变量，默认情况下，一个变量保存
 `注意:单引号里的内容原封不动的输出，双引号里有变量的调用则会调用变量。`
 
 ~~~sh
-[root@node1 shell]# username="itcast
+[root@node1 shell]# username="itcast"
 ~~~
 
 #### **访问变量**
@@ -609,12 +609,11 @@ shell变量是一种很“弱”的变量，默认情况下，一个变量保存
 itcast
 ~~~
 
-如果需要增加变量的值，那么可以进行变量值的叠加。不够变量需要用双引号包含"$变量名"或${变
-量名}
+如果需要增加变量的值，那么可以进行变量值的叠加。不过变量需要用双引号包含"$变量名"或${变量名}
 
 ~~~sh
-[root@node1 ~]# usernmae="itcast
-[root@node1 ~]# echo $usernamedb.log #这种方式不可以
+[root@node1 ~]# usernmae="itcast"
+[root@node1 ~]# echo $usernamedb.log #这种方式不可以（echo $username.log可以）
 .log
 [root@node1 ~]# echo "$username"db.log #可以
 itcastdb.log
@@ -622,31 +621,11 @@ itcastdb.log
 itcastdb.log
 ~~~
 
-测试脚本
-test1.sh
-
-~~~sh
-#!/bin/bash
-
-string="l am shell"
-num=5
-echo "a=${num},string=${string}"
-~~~
-
-执行脚本
-
-~~~sh
-[root@node1 shelll# sh test1.sh
-a=,string=l am shell
-~~~
-
 #### **变量的其他赋值方式**
 
 1) 可以使用read关键字从键盘获取内容赋值给变量
 
 2) 可以通过$(linux命令)或者$`linux命令`来执行linux命令，并将命令的执行结果赋值给变量
-
- 
 
 test2.sh
 
@@ -681,9 +660,9 @@ test3. sh
 
 ~~~sh
 #!/bin/bash
-myUrl="http://www.google.com
-readonly myUr1
-myUrl-"http://www.runoob.com"
+myUrl="http://www.google.com"
+readonly myUrl
+myUrl="http://www.runoob.com"
 ~~~
 
 运行脚本，结果如下:
@@ -700,7 +679,7 @@ test4.sh
 
 ~~~sh
 #!/bin/sh
-myUrl="http://www.runoob.com
+myUrl="http://www.runoob.com"
 unset myUrl
 echo $myUrl
 ~~~
@@ -758,19 +737,19 @@ export SERVICE_HOST=www.itcast.cn
 环境变量的使用方式和普通变量是一样的：$环境变量名
 
 ~~~sh
-[root@node1 shell]# echo $SERVICE HOST
+[root@node1 shell]# echo $SERVICE_HOST
 ~~~
 
 ### 特殊变量
 
-我们可以在执行 Shell 脚本时，向脚本传递参数，这时候可以使用特变变量来获取参数，Shell常用的特殊变量如下:
+我们可以在执行 Shell 脚本时，向脚本传递参数，这时候可以使用特殊变量来获取参数，Shell常用的特殊变量如下:
 
 | **变量** | **解释**                                     |
 | -------- | -------------------------------------------- |
 | $#       | 命令行参数的个数                             |
 | $n       | $1表示第一个参数，$2表示第二个参数，以此类推 |
 | $0       | 当前程序的名称                               |
-| $?       | 前一个命令或许或函数的返回码                 |
+| $?       | 前一个命令退出码或函数的返回码               |
 | $*       | 以“参数1 参数2 。。。”形式保存所有参数       |
 | $@       | 以“参数1”“参数2”。。。形式保存所有参数       |
 | $$       | 本程序的（进程ID号）PID                      |
@@ -828,8 +807,6 @@ echo $str
 我很崇拜$name
 ~~~
 
-
-
 **单引号字符串的限制**：
 
 单引号里的任何字符都会原样输出，单引号字符串中的变量是无效的,单引号字串中不能出现单独一个的单引号（对单引号使用转义符后也不行），但可成对出现，作为字符串拼接使用。
@@ -842,7 +819,7 @@ str="我很崇拜$name"
 echo $str
 
 输出结果为：
-我很崇拜 乔布斯
+我很崇拜乔布斯
 ~~~
 
 双引号的优点：
@@ -896,7 +873,7 @@ echo ${#string}   # 输出结果: 4
 
 ### **提取子字符串**
 
-以下实例从字符串索引为2 的字符开始截取 4 个字符
+从字符串索引为2 的字符开始截取 2 个字符
 
 ~~~sh
 #!/bin/bash
@@ -927,11 +904,11 @@ val=`expr 2 + 2`
 echo $val
 ~~~
 
-***\*注意：\****
+**注意：**
 
 表达式和运算符之间要有空格，例如 2+2 是不对的，必须写成 2 + 2。
 
-完整的表达式要被` `包含，注意不是单引号，在 Esc 键下边。
+`完整的表达式要被反引号包含。`
 
 下表列出了常用的算术运算符，假定变量 a为10，变量b为20：
 
@@ -1041,7 +1018,7 @@ fi
 DIR="/media/cdrom" 
 if [ ! -e $DIR ] 
 then 
-mkdir -p $DIR 
+	mkdir -p $DIR 
 fi
 ~~~
 
@@ -1711,7 +1688,7 @@ do
      "shell")
        echo "运维必会"
      ;;
-     python)
+     "python")
        echo "人工智能"
      esac
      break    # 如果这里没有break 将会进行无限循环
@@ -1885,7 +1862,7 @@ tar -czvf ${DATETIME}.tar.gz ${DATETIME}
 #删除临时目录
 rm -rf ${BACKUP}/${DATETIME}
 #删除10天前的备份文件
-find ${BACKUP} -mtime +10 -name "*.tar.gz" -exec rm -rf {} ;
+find ${BACKUP} -mtime +10 -name "*.tar.gz" -exec rm -rf {} \;
 echo "-------------------------备份成功-------------------------"
 ~~~
 
