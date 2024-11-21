@@ -339,35 +339,67 @@ ssh-copy-id -i /root/.ssh/id_rsa.pub root@IP
 
 # kafka架构
 
-### 一些概念
+## 一些概念
 
-**分区**：topic下有多个分区，可以跨节点
+- Broker:一台 Kafka 服务器就是一个 Broker, 一个集群由多个 Broker 组成， 一个 Broker可以容纳多个 Topic, Broker 和 Broker 之间没有 Master 和 Standby 的概念， 它们之间的地位基本是平等的。
+- Topic: 每条发送到 Kafka 集群的消息都属千某个主题， 这个主题就称为 Topic。 物理上不同 Topic 的消息分开存储， 逻辑上一个 Topic 的消息虽然保存在一个或多个Broker 上， 但是用户只需指定消息的主题 Topic 即可生产或消费数据而不需要去关 心数据存放在何处。
+- Partition: 为了实现可扩展性， 一个非常大的 Topic 可以被分为多个 Partition, 从而分布到多台 Broker 上。 Partition 中的每条消息都会被分配一个自增 Id (Offset) 。 Kafka只保证按一个 Partition 中的顺序将消息发送给消费者， 但是不保证单个 Topic 中的多个Partition之间的顺序。
+- Offset: 消息在 Topic 的 Partition 中的位置， 同一个 Partition 中的消息随着消息的写 入， 其对应的 Offset 也自增。
+- Replica: 副本。 Topic 的 Partition 含有N 个 Replica, N 为副本因子。 其中一个 Replica为Leader,其他都为Follower,Leader处理Partition的所有读写请求，与此同时Follower会定期地去同步Leader上的数据。
+- Message ：消息， 是通信的基本单位。 每个 Producer 可以向一个 Topic （主题）发布一些消息。
+- Producer: 消息生产者， 即将消息发布到指定的 Topic 中， 同时 Producer 也能决定此消息所属的 Partition : 比如基千 Round-Robin （轮询）方式或者 Hash （哈希）方式等一些算法。
+- Consumer: 消息消费者， 即向指定的 Topic 获取消息， 根据指定 Topic 的分区索引及其对应分区上的消息偏移量来获取消息。
+- Consumer Group :消费者组， 每个 Consumer 属于 个 Consumer Group ;反过来， 每一个 Consumer Group 中可以包含多个 Consumer。 如果所有的 Consumer 都具有相 同的 Consumer Group, 那么消息将会在 Consumer 之间进行负载均衡。 也就是说一个 Partition 中的消息只会被相同Consumer Group 中的某个 Consumer 消费。每 个 Consumer Group 消息消费是相互独立的。 如果所有的 Consumer 都具有不同的 Consumer Group, 则消息将会被广播给所有的 Consumer。
+- Zookeeper: 存放 Kafka 集群相关元数据的组件。 在 Zookeeper 集群中会保存 Topic的状态信息， 例如分区的个数、 分区的组成、 分区的分布情况等；保存 Broker 的状 态信息；保存消费者的消费信息等。 通过这些信息， Kafka 很好地将消息生产、 消息 存储、 消息消费的过程结合起来。
 
-**副本**：一个分区有多个副本，一主多从，leader负责读写，follower们负责从leader拉取数据保持同步。
+
 
 ![image-20220610135801493](images\image-20220610135801493.png)
 
+## kafka内部通信协议
 
+![image-20241121140117313](images/image-20241121140117313.png)
 
-### Leader选举流程
+### 介绍
+
+- **ProducerRequest** :生产者发送消息的请求，生产者将消息发送至Kafka集群中的某个Broker,Broker接收到此请求后持久化此消息并更新相关元数据信息。
+- **TopicMetadataRequest** :获取Topic元数据信息的请求，无论是生产者还是消费者都需要通过此请求来获取感兴趣的Topic的元数据。
+- **FetchRequest**:消费者获取感兴趣Topic的某个分区的消息的请求，除此之外，分区状态为Follower的副本也需要利用此请求去同步分区状态为Leader的对应副本数据。
+- **OffsetRequest** :消费者发送至Kafka集群来获取感兴趣Topic的分区偏移量的请求， 通过此请求可以获知当前Topic所有分区在不同时间段的偏移量详情。
+- **OffsetCommitRequest**: 消费者提交 Topic 被消费的分区偏移量信息至 Broker, Broker接收到此请求后持久化相关偏移量信息。
+- **OffsetFetchRequest** :消费者发送获取提交至Kafka集群的相关Topic被消费的详细 信息，和OffsetCommi tRequest相互对应。
+- **LeaderAndlsrRequest** :当Topic的某个分区状态发生变化时，处于Leader状态的 KafkaController发送此请求至相关的Broker,通知其做出相应的处理。
+- **StopReplicaRequest** :当Topic的某个分区被删除或者下线的时候，处于Leader状态 的KafkaController发送此请求至相关的Broker,通知其做出相应的处理。
+- **UpdateMetadataRequest** :当Topic的元数据信息发生变化时，处千Leader状态的KafkaController发送此请求至相关的Broker,通知其做出相应的处理。
+- **BrokerControlledShutdownRequest**: 当 Broker 正常下线时， 发生此请求至处于 Leader状态的 KafkaController
+- **ConsumerMetadataRequest**:获取保存特定ConsumerGroup消费详情的分区信息。
+
+### 通信协议交互
+
+- **Producer 和 Kafka 集群**： Producer 需要利用 ProducerRequest 和 TopicMetadataRequest来完成 Topic 元数据的查询、 消息的发送。
+- **Consumer 和 Kafka 集群**： Consumer 需要利用 TopicMetadataRequest 请求、 FetchRequest 请求、 OffsetRequest 请求、 OffsetCommitRequest 请求、 OffsetFetchRequest 请求和 ConsumerMetadataRequest 请求来完成 Topic 元数据的查询、消息的订阅、 历史偏移量 的查询、 偏移量的提交、 当前偏移量的查询。
+- **KafkaController 状态为 Leader 的 Broker 和 KafkaController 状态为 Standby 的 Broker**: KafkaController 状态为 Leader 的 Broker 需要利用 LeaderAndlsrRequest 请求、 Stop­ReplicaRequest 请求、 UpdateMetadataRequest 请求来完成对Topic 的管理； Kafka­Controller 状态为Standby 的 Broker 需要利BrokerControlledShutdownRequest 请求来通知 KafkaController 状态为 Leader 的 Broker 自己的下线动作。
+- **Broker 和 Broker 之间**： Broker 相互之间需要利用 FetchRequest 请求来同步 Topic 分 区的副本数据， 这样才能使 Topic 分区各副本数据实时保持一致。
+
+## Leader选举流程
 
 ![image-20220615135850269](images\image-20220615135850269.png)
 
 
 
-### Leader故障处理细节
+## Leader故障处理细节
 
 ![image-20220615140438511](images\image-20220615140438511.png)
 
 
 
-### Follower故障处理细节
+## Follower故障处理细节
 
 ![image-20220615140242257](images\image-20220615140242257.png)
 
 
 
-### 文件清理策略
+## 文件清理策略
 
 > Kafka 中默认的日志保存时间为 7 天，可以通过调整如下参数修改保存时间。
 >
@@ -409,7 +441,7 @@ ssh-copy-id -i /root/.ssh/id_rsa.pub root@IP
 >
 > 集里就保存了所有用户最新的资料。 
 
-### **高效读写数据**
+## **高效读写数据**
 
 **1**）**Kafka** **本身是分布式集群，可以采用分区技术，并行度高**
 
