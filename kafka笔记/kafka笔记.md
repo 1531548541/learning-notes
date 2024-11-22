@@ -356,7 +356,7 @@ ssh-copy-id -i /root/.ssh/id_rsa.pub root@IP
 
 ![image-20220610135801493](images\image-20220610135801493.png)
 
-## kafka内部通信协议
+## kafka内部通信
 
 ![image-20241121140117313](images/image-20241121140117313.png)
 
@@ -374,12 +374,397 @@ ssh-copy-id -i /root/.ssh/id_rsa.pub root@IP
 - **BrokerControlledShutdownRequest**: 当 Broker 正常下线时， 发生此请求至处于 Leader状态的 KafkaController
 - **ConsumerMetadataRequest**:获取保存特定ConsumerGroup消费详情的分区信息。
 
-### 通信协议交互
+### 通信交互
 
 - **Producer 和 Kafka 集群**： Producer 需要利用 ProducerRequest 和 TopicMetadataRequest来完成 Topic 元数据的查询、 消息的发送。
 - **Consumer 和 Kafka 集群**： Consumer 需要利用 TopicMetadataRequest 请求、 FetchRequest 请求、 OffsetRequest 请求、 OffsetCommitRequest 请求、 OffsetFetchRequest 请求和 ConsumerMetadataRequest 请求来完成 Topic 元数据的查询、消息的订阅、 历史偏移量 的查询、 偏移量的提交、 当前偏移量的查询。
 - **KafkaController 状态为 Leader 的 Broker 和 KafkaController 状态为 Standby 的 Broker**: KafkaController 状态为 Leader 的 Broker 需要利用 LeaderAndlsrRequest 请求、 Stop­ReplicaRequest 请求、 UpdateMetadataRequest 请求来完成对Topic 的管理； Kafka­Controller 状态为Standby 的 Broker 需要利BrokerControlledShutdownRequest 请求来通知 KafkaController 状态为 Leader 的 Broker 自己的下线动作。
 - **Broker 和 Broker 之间**： Broker 相互之间需要利用 FetchRequest 请求来同步 Topic 分 区的副本数据， 这样才能使 Topic 分区各副本数据实时保持一致。
+
+## Broker
+
+### broker启动
+
+![image-20241121154952995](images/image-20241121154952995.png)
+
+从启动命令中找到KafkaServer类：
+
+~~~scala
+/**
+ * Represents the lifecycle of a single Kafka broker. Handles all functionality required
+ * to start up and shutdown a single Kafka node.
+ */
+class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logging with KafkaMetricsGroup {
+  this.logIdent = "[Kafka Server " + config.brokerId + "], "
+  private var isShuttingDown = new AtomicBoolean(false)
+  private var shutdownLatch = new CountDownLatch(1)
+  private var startupComplete = new AtomicBoolean(false)
+  val brokerState: BrokerState = new BrokerState
+  val correlationId: AtomicInteger = new AtomicInteger(0)
+    
+  var socketServer: SocketServer = null
+  var requestHandlerPool: KafkaRequestHandlerPool = null
+  var logManager: LogManager = null
+  var offsetManager: OffsetManager = null
+  var kafkaHealthcheck: KafkaHealthcheck = null
+  var topicConfigManager: TopicConfigManager = null
+  var replicaManager: ReplicaManager = null
+  var apis: KafkaApis = null
+  var kafkaController: KafkaController = null
+  val kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
+    
+  var zkClient: ZkClient = null
+  ......
+}
+~~~
+
+- **SocketServer** :首先开启 1 个Acceptor线程用于监听默认端口号为 9092 上的 Socket链接， 然后当有新的 Socket链接成功建立时，会将对应的 SocketChannel 以轮询的 方式转发给 N个Processor线程 中的某一个， 并由其处理接下来该 SocketChannel上的读写请求， 其中 N=num.network.threads, 默认为 3 。 当 Processor线程监听来自 SocketChannel 的请求时， 会将请求放置在 RequestChannel 中的请求队列； 当Processor线程监听到 SocketChannel 请求的响应时， 会将响应从 RequestChannel 中 的响应队列中取出来并发送给客户端。
+
+- **KafkaRequestHandlerPool** :真正处理Socket请求的线程池，其个数默认为8 个，由参数num.io.threads决定。该线程池里面的线程KafkaRequestHandler从RequestChannel的请求队列中获取 Socket 的请求， 然后调用 KafkaApis 完成真正的业务逻辑， 最后将响应写回至 RequestChannel 中的响应队列， 并交由 SocketServer 中对应的 Processor线程发送给客户端。
+
+- **LogManager** : Kafka的日志管理模块。主要提供删除任何过期数据和冗余数据，刷新脏数据，对日志文件进行Checkpoint以及日志合并的功能。
+- **ReplicaManager**: Kafka的副本管理模块。主要提供针对Topic分区副本数据的管理 功能，包括有关副本的Leader和ISR的状态变化、副本的删除、副本的监测等。其 中ISR全称为In-SyncReplicas，即处于同步状态的副本。
+- **OffsetManager** : Kafka的偏移量管理模块。主要提供针对偏移量的保存和读取的功能， Kafka 管理Topic 的偏移量存在两种方式： 一种为 Zookeeper, 就是把偏移量提交至 Zookeeper 上；另一种为 Kafka, 就是把偏移量提交至 Kafka 内部 Topic为"\_\_consumer_ offsets" 的日志里面，主要由 offsets.storage 参数决定，默认为zookeeper。
+- **KafkaScheduler** : Kafka的后台任务调度资源池。提供后台定期任务的洞度，主要为LogManager、ReplicaManager和OffsetManager提供调度服务。
+- **KafkaApis** : Kafka的业务逻辑实现层，根据不同的Request执行不同的操作，其中利 用LogManager、OffsetManager和ReplicaManager来完成内部的处理。KafkaApis处 理的请求包括ProducerRequest、TopicMetadataRequest、FetchRequest、OffsetRequest、 OffsetCommitRequest、OffsetFetchRequest、LeaderAndlsrRequest、StopRepIicaRequest、 UpdateMetadataRequest、BrokerControlledShutdownRequest和ConsumerMetadataRequest。
+- **KafkaHealthcheck** : Broker Server 在 /brokers/ids 上注册自己的 ID, 当 Broker 在线的 时候， 则对应的 ID 存在；当 Broker 离线的时候， 则对应的 ID 不存在， 以此来达到集群状态监测的目的。
+- **TopicConfigManager**：在/config/changes上注册自己的回调函数来监测Topic配置信息的变化。
+- **KafkaController** : Kafka 的集群控制管理模块。 由于 Zookeeper 上保存了 Kafka 集群的元数据信息， 因此 KafkaControIler 通过在不同目录注册不同的回调函数来达到监 测集群状态的目的， 及时响应集群状态的变化。 比如说：
+  1)	/controller 目录保存了 Kafka 集群中状态为 Leader 的 KafkaController 标识， 通过监测这个目录的变化可以及时响应 KafkaController 状态的切换；
+  2)	/admin/reassign_partitions目录保存了Topic重分区的信息，通过监测这个目录的 变化可以及时响应Topic分区变化的请求；
+  3)	/admin/preferred_replica_election目录保存了Topic分区副本的信息，通过监测这个目录的变化可以及时响应Topic分区副本变化的请求；
+  4)	/brokers/topics目录保存了Topic的信息，通过监测这个目录的变化可以及时响应Topic创建和删除的请求；
+  5)	/brokers/ids 目录保存了 Broker 的状态， 通过监测这个目录的变化可以及时响应 Broker 的上下线情况等。
+
+### **SocketServer** 
+
+> SocketServer 作为 Broker 对外提供 Socket 服务的模块， 主要用于接收 Socket 连接的 请求， 然后产生相应为之服务的 SocketChannel 对象， 通过此对象来和客户端相互通信。
+
+它内部主要包括三个模块：
+
+1) Acceptor主要用于监听Socket的连接；
+
+2) Processor主要用于转发Socket的请求和响应；
+
+3) RequestChannel主要用于缓存Socket的请求和响应。
+
+~~~scala
+/**
+ * An NIO socket server. The threading model is
+ *   1 Acceptor thread that handles new connections
+ *   N Processor threads that each have their own selector and read requests from sockets
+ *   M Handler threads that handle requests and produce responses back to the processor threads for writing.
+ */
+class SocketServer(val brokerId: Int,
+                   val host: String,
+                   val port: Int,
+                   val numProcessorThreads: Int,
+                   val maxQueuedRequests: Int,
+                   val sendBufferSize: Int,
+                   val recvBufferSize: Int,
+                   val maxRequestSize: Int = Int.MaxValue,
+                   val maxConnectionsPerIp: Int = Int.MaxValue,
+                   val connectionsMaxIdleMs: Long,
+                   val maxConnectionsPerIpOverrides: Map[String, Int] ) extends Logging with KafkaMetricsGroup {
+  this.logIdent = "[Socket Server on Broker " + brokerId + "], "
+  private val time = SystemTime
+  private val processors = new Array[Processor](numProcessorThreads)
+  @volatile private var acceptor: Acceptor = null
+  val requestChannel = new RequestChannel(numProcessorThreads, maxQueuedRequests)
+  ......
+}
+~~~
+
+#### Acceptor
+
+Acceptor的初始化过程如下：
+
+1) 开启Socket 服务。
+
+2) 注册Accept 事件。
+
+3) 监听此 ServerChannel 上的 ACCEPT 事件， 当其发生时， 将其以轮询 (Round Robin)的方式把对应的 SocketChannel转交给Processor处理线程。
+
+~~~scala
+/**
+ * Thread that accepts and configures new connections. There is only need for one of these
+ */
+private[kafka] class Acceptor(val host: String, 
+                              val port: Int, 
+                              private val processors: Array[Processor],
+                              val sendBufferSize: Int, 
+                              val recvBufferSize: Int,
+                              connectionQuotas: ConnectionQuotas) extends AbstractServerThread(connectionQuotas) {
+  // 开启Socket服务
+  val serverChannel = openServerSocket(host, port)
+
+  /**
+   * Accept loop that checks for new connection attempts
+   */
+  def run() {
+    // 注册Accept事件
+    serverChannel.register(selector, SelectionKey.OP_ACCEPT);
+    startupComplete()
+    var currentProcessor = 0
+    //  监听Accept事件
+    while(isRunning) {
+      val ready = selector.select(500)
+      if(ready > 0) {
+        val keys = selector.selectedKeys()
+        val iter = keys.iterator()
+        while(iter.hasNext && isRunning) {
+          var key: SelectionKey = null
+          try {
+            key = iter.next
+            iter.remove()
+            if(key.isAcceptable)
+               accept(key, processors(currentProcessor))
+            else
+               throw new IllegalStateException("Unrecognized key state for acceptor thread.")
+
+            // round robin to the next processor thread
+            currentProcessor = (currentProcessor + 1) % processors.length
+          } catch {
+            case e: Throwable => error("Error while accepting connection", e)
+          }
+        }
+      }
+    }
+    debug("Closing server socket and selector.")
+    swallowError(serverChannel.close())
+    swallowError(selector.close())
+    shutdownComplete()
+  }
+  ......
+}
+~~~
+
+
+
+#### Processor
+
+~~~scala
+/**
+ * Thread that processes all requests from a single connection. There are N of these running in parallel
+ * each of which has its own selectors
+ */
+private[kafka] class Processor(val id: Int,
+                               val time: Time,
+                               val maxRequestSize: Int,
+                               val aggregateIdleMeter: Meter,
+                               val idleMeter: Meter,
+                               val totalProcessorThreads: Int,
+                               val requestChannel: RequestChannel,
+                               connectionQuotas: ConnectionQuotas,
+                               val connectionsMaxIdleMs: Long) extends AbstractServerThread(connectionQuotas) {
+
+  private val newConnections = new ConcurrentLinkedQueue[SocketChannel]()
+  private val connectionsMaxIdleNanos = connectionsMaxIdleMs * 1000 * 1000
+  private var currentTimeNanos = SystemTime.nanoseconds
+  private val lruConnections = new util.LinkedHashMap[SelectionKey, Long]
+  private var nextIdleCloseCheckTime = currentTimeNanos + connectionsMaxIdleNanos
+
+  override def run() {
+    startupComplete()
+    while(isRunning) {
+      // 针对新的连接， 注册其上的OP_READ事件
+      configureNewConnections()
+      // 从RequestChannel获取响应产生OP_WRITE事件
+      processNewResponses()
+      val startSelectTime = SystemTime.nanoseconds
+      val ready = selector.select(300)
+      currentTimeNanos = SystemTime.nanoseconds
+      val idleTime = currentTimeNanos - startSelectTime
+      idleMeter.mark(idleTime)
+      // We use a single meter for aggregate idle percentage for the thread pool.
+      // Since meter is calculated as total_recorded_value / time_window and
+      // time_window is independent of the number of threads, each recorded idle
+      // time should be discounted by # threads.
+      aggregateIdleMeter.mark(idleTime / totalProcessorThreads)
+
+      trace("Processor id " + id + " selection time = " + idleTime + " ns")
+      // 监听selector上的OP_READ事件和OP_WRITE事件
+      if(ready > 0) {
+        val keys = selector.selectedKeys()
+        val iter = keys.iterator()
+        while(iter.hasNext && isRunning) {
+          var key: SelectionKey = null
+          try {
+            key = iter.next
+            iter.remove()
+            if(key.isReadable)
+              read(key)
+            else if(key.isWritable)
+              write(key)
+            else if(!key.isValid)
+              close(key)
+            else
+              throw new IllegalStateException("Unrecognized key state for processor thread.")
+          } catch {
+            case e: EOFException => {
+              info("Closing socket connection to %s.".format(channelFor(key).socket.getInetAddress))
+              close(key)
+            } case e: InvalidRequestException => {
+              info("Closing socket connection to %s due to invalid request: %s".format(channelFor(key).socket.getInetAddress, e.getMessage))
+              close(key)
+            } case e: Throwable => {
+              error("Closing socket for " + channelFor(key).socket.getInetAddress + " because of error", e)
+              close(key)
+            }
+          }
+        }
+      }
+      maybeCloseOldestConnection
+    }
+    debug("Closing selector.")
+    closeAll()
+    swallowError(selector.close())
+    shutdownComplete()
+  }
+~~~
+
+其中 newConnections 保存了由 Acce􀀂tor 线程转移过来的 SocketChannel 对象， 主要步骤如下：
+
+1) 当有新的 SocketChannel 对象进来的时候， 注册其上的 OP_READ 事件以便接收客户端的请求。
+
+2)从 RequestChannel 中的响应队列获取对应客户端请求的响应， 然后产生 OP_WRITE事件。
+
+3)监听selector上的事件。 如果是读事件， 说明有新的request到来 需要转移给 RequestChannel的请求队列；如果是写事件， 说明之前的 request已经处理完毕， 需要从RequestChannel的响应队列获取响应并发送回客户端；如果是关闭事件， 说明客户端已经关 闭了该Socket连接， 此时服务端也应该释放相应资源。
+
+**注意： OP_WRlTE为NIO中的写事件， 如果SelectKey注册了写事件， 不在合适的时间去除掉， 会一直触发写事件，因为写事件是代码触发的，其他详情可以翻阅NIO相关资料。**
+
+除此之外，SocketServer为了防止空闲连接大量存在，采用了LRU(Least Recently Used)算法，即最近最少使用算法，会将长时间没有交互的SocketChannel对象关闭，及时释放资源。 因此Processor仅仅是起到了接收Request，发送Response的作用，其处理Request的具体业务逻辑是由KafkaApis层负责的， 并且两者之间是通RequestChannel相互联系起来的。
+
+
+
+#### RequestChannel
+
+RequestChannel本质上就是为了解耦SocketServer和KafkaApis两个模块， 内部包含Request的阻塞队列和Response的阻塞队列，其具体实现如下：
+
+~~~scala
+class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMetricsGroup {
+  private var responseListeners: List[(Int) => Unit] = Nil
+  private val requestQueue = new ArrayBlockingQueue[RequestChannel.Request](queueSize)
+  private val responseQueues = new Array[BlockingQueue[RequestChannel.Response]](numProcessors)
+  for(i <- 0 until numProcessors)
+    responseQueues(i) = new LinkedBlockingQueue[RequestChannel.Response]()
+  
+  def sendRequest(request: RequestChannel.Request) {
+    requestQueue.put(request)
+  }
+  
+  /** Send a response back to the socket server to be sent over the network */ 
+  def sendResponse(response: RequestChannel.Response) {
+    responseQueues(response.processor).put(response)
+    for(onResponse <- responseListeners)
+      onResponse(response.processor)
+  }
+}
+~~~
+
+RequestChannel内部包含了1个Request的阻塞队列和numProcessors个Response的阻塞队 列， 其中numProcessors =num.network.threads, 默认为3个。 Processor线程通过监听OP_READ 事件将Request转移到RequestChannel内部的Request阻塞队列， KatkaRequestHandlerPool内部的KafkaRequestHandler线程从RequestChannel内部的Request阻塞队列取出Request进行处理， 然后将对应的Response放回至RequestChannel内部的Response阻塞队列， 并触发 Processor线程监听的OP_WRITE事件， 最后由Processor线程将Response发送至客户端， 相互之间具体的关系如图 4-1所示。
+
+![image-20241122104223701](images/image-20241122104223701.png)
+
+其中 Request 对象的 processor 变量标识了该 Request 来源千哪个 Processor 线程， 假设Request. processor=i, 则该 Request 的Response 最终会存放在第 i 个Response 阻塞队列， 即 responseQueue[i]。 Request 对象的属性如下：
+
+~~~scala
+case class Request(processor: Int,
+                   requestKey: Any, 
+				   private var buffer: ByteBuffer, 
+				   StartTimeMs: Long, 
+				   remoteAddress: SocketAddress = new InetSocketAddress(O)
+                  ) { 
+    ......
+}
+~~~
+
+### KafkaRequestHandlerPool
+
+KafkaRequestHandlerPooI 本质上就是一个线程池，里面包含了 num.io. threads 个 IO 处理线程， 默认为 8 个， 其内部实现如下：
+
+~~~scala
+KafkaRequestHandlerPool(val brokerid: Int, 
+                        val requestChannel: RequestChannel, 
+                        val apis: KafkaApis, 
+						nurnThreads: Int) extends Logging with KafkaMetricsGroup { 
+    ......
+    val threads = new Array[Thread](numThreads) 
+	val runnables = new Array[KafkaRequestHandler](numThreads) 
+    for(i <- O until numThreads) { 
+    	runnables(i) = new KafkaRequestHandler(i, 
+                                               brokerId, 
+                                               aggregateidleMeter, 
+                                               numThreads, 																				   requestChannel, 
+											   apis) 
+        threads(i) = Utils.daemonThread("kafka-request－handler-"+i,runnables(i)
+        threads(i).start()
+	}
+    ......                                    
+}
+~~~
+
+KafkaRequestHandlerPool在内部启动了若干个KafkaRequestHandler处理线程，并将RequestChannel对象和KafkaApis对象传递给了KafkaRequestHandler处理线程，因为KafkaRequestHandler需要从前者的requestQueue中取出Request,并且利用后者来完成具体的业务逻辑。请看KafkaRequestHandler具体的实现：
+其主要步骤如下：
+
+1) 通过调用 requestChannel.receiveRequest 从 requestChannel 的 Request 阻塞队列中获取请求， 如果获取不到，则一直在 while 循环之中不断尝试， 直至获取到新的请求为止。
+
+2) 判断请求类型， 如果是 RequestChannel.AllDone 类型的话， 则退出线程；否则调用 apis 完成请求的处理， 并由 apis 负责将对应的响应放入 requestChannel 的 Response 阻塞队列。
+
+~~~scala
+/**
+ * A thread that answers kafka requests.
+ */
+class KafkaRequestHandler(id: Int,
+                          brokerId: Int,
+                          val aggregateIdleMeter: Meter,
+                          val totalHandlerThreads: Int,
+                          val requestChannel: RequestChannel,
+                          apis: KafkaApis) extends Runnable with Logging {
+  this.logIdent = "[Kafka Request Handler " + id + " on Broker " + brokerId + "], "
+
+  def run() {
+    while(true) {
+      try {
+        var req : RequestChannel.Request = null
+        while (req == null) {
+          // We use a single meter for aggregate idle percentage for the thread pool.
+          // Since meter is calculated as total_recorded_value / time_window and
+          // time_window is independent of the number of threads, each recorded idle
+          // time should be discounted by # threads.
+          val startSelectTime = SystemTime.nanoseconds
+          req = requestChannel.receiveRequest(300)
+          val idleTime = SystemTime.nanoseconds - startSelectTime
+          aggregateIdleMeter.mark(idleTime / totalHandlerThreads)
+        }
+
+        if(req eq RequestChannel.AllDone) {
+          debug("Kafka request handler %d on broker %d received shut down command".format(
+            id, brokerId))
+          return
+        }
+        req.requestDequeueTimeMs = SystemTime.milliseconds
+        trace("Kafka request handler %d on broker %d handling request %s".format(id, brokerId, req))
+        apis.handle(req)
+      } catch {
+        case e: Throwable => error("Exception when handling request", e)
+      }
+    }
+  }
+
+  def shutdown(): Unit = requestChannel.sendRequest(RequestChannel.AllDone)
+}
+~~~
+
+因此 SocketServer 的 Processor 线程和 KafkaRequestHandlerPool 的 KafkaRequestHandler线程利用SocketServer内部的RequestChannel实现了一个简单的生成者和消费者模型，即如图4-2所示。
+
+![image-20241122110003960](images/image-20241122110003960.png)
+
+
+
+### KafkaApis
+
+
 
 ## Leader选举流程
 
