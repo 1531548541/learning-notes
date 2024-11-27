@@ -764,7 +764,75 @@ class KafkaRequestHandler(id: Int,
 
 ### KafkaApis
 
+#### LogManager
 
+> LogManager负责提供BrokerServer上Topic的分区数据读取和写入功能，负责读取和写入位于BrokerServer上的所有分区副本数据；如果Partition有多个Replica,则每个 Broker Server不会存在相同Partition的Replica;如果存在的话，一旦遇到BrokerServer下 线，则会立刻丢失Partition的多份副本，失去了一定的可靠性。
+
+~~~scala
+class LogManager(val logDirs: Array[File],
+                 val topicConfigs: Map[String, LogConfig],
+                 val defaultConfig: LogConfig,
+                 val cleanerConfig: CleanerConfig,
+                 ioThreads: Int,
+                 val flushCheckMs: Long,
+                 val flushCheckpointMs: Long,
+                 val retentionCheckMs: Long,
+                 scheduler: Scheduler,
+                 val brokerState: BrokerState,
+                 private val time: Time) extends Logging {
+  val RecoveryPointCheckpointFile = "recovery-point-offset-checkpoint"
+  val LockFile = ".lock"
+  val InitialTaskDelayMs = 30*1000
+  private val logCreationOrDeletionLock = new Object
+  private val logs = new Pool[TopicAndPartition, Log]()
+  ......
+}
+~~~
+
+LogManager 利用 logs 来管理 Broker Server 内部的日志， 通过TopicAndPartition来索引不同 Topic 的不同 Partition 数据， 其Log 的大致组成如下：
+
+~~~scala
+class Log(val dir: File,
+          @volatile var config: LogConfig,
+          @volatile var recoveryPoint: Long = 0L,
+          scheduler: Scheduler,
+          time: Time = SystemTime) extends Logging with KafkaMetricsGroup {
+
+  import kafka.log.Log._
+/* the actual segments of the log */
+  private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
+  loadSegments()
+  ......
+}
+~~~
+
+Log 利用 segments 来管理 Partition 的数据， 里面包含多个日志段， 即 LogSegment。此 LogManager Log和LogSegment 的关系如图所示 4-4 所示。
+
+![image-20241125141509909](images/image-20241125141509909.png)
+
+~~~scala
+class LogSegment(val log: FileMessageSet, 
+                 val index: OffsetIndex, 
+                 val baseOffset: Long, 
+                 val indexIntervalBytes: Int,
+                 val rollJitterMs: Long,
+                 time: Time) extends Logging {
+}
+~~~
+
+其中log代表的是消息 集合， 每条消息都有一个Offset, 这是针对Partition中的偏移掀；index代表的是消息的索引信息， 以KV对的形式记录， 其中K为消息在log中的相 对偏移扯， V为消息在log中的绝对位置；baseOffset代表的是该LogSegment日志段的起始偏移扯；indexIn tervalB ytes代表的是索引的粒度， 即写入多少字节之后生成一条索引， Offsetlndex不会保存每条消息的索引， 因此其索引文件是一个稀疏索引文件， 具体的表现形式如图4-5所示。
+
+![image-20241125141705949](images/image-20241125141705949.png)
+
+00000000368769.log文 件记录了消息 的集合， 其中baseOffset= 00000000368769。00000000368769.index文件代表了消息的索引，内部以KV对的形式保存，比如第一条索引 记录(I,0)中的1代表在该文件中相对偏移量为1的消息在log文件中的物理偏移扯，即 绝对偏移量Offset为00000000368770(00000000368769+1)的消息在log中的起始物理位 置为0。
+
+000000003687 69. index并不保存所有记录的索引， 因为indexlnterva1Bytes=400, 即当累计消息的字节数大于400时， 保存一条索引。
+
+#### ReplicaManager
+
+#### OffsetManager
+
+#### KafkaScheduler
 
 ## Leader选举流程
 
