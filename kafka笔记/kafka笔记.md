@@ -623,7 +623,7 @@ private[kafka] class Processor(val id: Int,
   }
 ~~~
 
-其中 newConnections 保存了由 Acce􀀂tor 线程转移过来的 SocketChannel 对象， 主要步骤如下：
+其中 newConnections 保存了由 Accector 线程转移过来的 SocketChannel 对象， 主要步骤如下：
 
 1) 当有新的 SocketChannel 对象进来的时候， 注册其上的 OP_READ 事件以便接收客户端的请求。
 
@@ -766,7 +766,7 @@ class KafkaRequestHandler(id: Int,
 
 #### LogManager
 
-> LogManager负责提供BrokerServer上Topic的分区数据读取和写入功能，负责读取和写入位于BrokerServer上的所有分区副本数据；如果Partition有多个Replica,则每个 Broker Server不会存在相同Partition的Replica;如果存在的话，一旦遇到BrokerServer下 线，则会立刻丢失Partition的多份副本，失去了一定的可靠性。
+> LogManager负责提供BrokerServer上Topic的分区数据读取和写入功能，负责读取和写入位于BrokerServer上的所有分区副本数据；如果Partition有多个Replica,则每个 Broker Server不会存在相同Partition的Replica;如果存在的话，一旦遇到BrokerServer下线，则会立刻丢失Partition的多份副本，失去了一定的可靠性。
 
 ~~~scala
 class LogManager(val logDirs: Array[File],
@@ -820,15 +820,17 @@ class LogSegment(val log: FileMessageSet,
 }
 ~~~
 
-其中log代表的是消息 集合， 每条消息都有一个Offset, 这是针对Partition中的偏移掀；index代表的是消息的索引信息， 以KV对的形式记录， 其中K为消息在log中的相 对偏移扯， V为消息在log中的绝对位置；baseOffset代表的是该LogSegment日志段的起始偏移扯；indexIn tervalB ytes代表的是索引的粒度， 即写入多少字节之后生成一条索引， Offsetlndex不会保存每条消息的索引， 因此其索引文件是一个稀疏索引文件， 具体的表现形式如图4-5所示。
+其中log代表的是消息 集合， 每条消息都有一个Offset, 这是针对Partition中的偏移量；index代表的是消息的索引信息， 以KV对的形式记录， 其中K为消息在log中的相 对偏移扯， V为消息在log中的绝对位置；baseOffset代表的是该LogSegment日志段的起始偏移扯；indexIntervalBytes代表的是索引的粒度， 即写入多少字节之后生成一条索引， Offsetlndex不会保存每条消息的索引， 因此其索引文件是一个稀疏索引文件， 具体的表现形式如图4-5所示。
 
 ![image-20241125141705949](images/image-20241125141705949.png)
 
-00000000368769.log文 件记录了消息 的集合， 其中baseOffset= 00000000368769。00000000368769.index文件代表了消息的索引，内部以KV对的形式保存，比如第一条索引 记录(I,0)中的1代表在该文件中相对偏移量为1的消息在log文件中的物理偏移扯，即 绝对偏移量Offset为00000000368770(00000000368769+1)的消息在log中的起始物理位 置为0。
+00000000368769.log文件记录了消息的集合， 其中baseOffset= 00000000368769。00000000368769.index文件代表了消息的索引，内部以KV对的形式保存，比如第一条索引 记录(I,0)中的1代表在该文件中相对偏移量为1的消息在log文件中的物理偏移扯，即 绝对偏移量Offset为00000000368770(00000000368769+1)的消息在log中的起始物理位 置为0。
 
-000000003687 69. index并不保存所有记录的索引， 因为indexlnterva1Bytes=400, 即当累计消息的字节数大于400时， 保存一条索引。
+00000000368769. index并不保存所有记录的索引， 因为indexlnterva1Bytes=400, 即当累计消息的字节数大于400时， 保存一条索引。
 
 #### ReplicaManager
+
+> ReplicaManager负责提供针对Topic的分区副本数据的同步功能，需要针对不同的变化及时做出响应，例如Partition的Replicas发生Leader切换的时候，Partition的Replicas所在的BrokerServer离线的时候，Partition的Replicas发生Follower同步Leader数据异常的时候，等等。
 
 #### OffsetManager
 
