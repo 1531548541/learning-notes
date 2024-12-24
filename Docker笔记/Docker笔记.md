@@ -128,7 +128,7 @@ systemctl enable docker
 sudo mkdir -p /etc/docker
 sudo tee /etc/docker/daemon.json <<-'EOF'
 {
-  "registry-mirrors": ["https://c9jwzg2k.mirror.aliyuncs.com"]
+  "registry-mirrors": ["https://hub.xdark.top","https://hub.littlediary.cn"]
 }
 EOF
 sudo systemctl daemon-reload
@@ -731,17 +731,17 @@ start slave;
 
 ```sh
 # 提前准备好redis.conf文件，创建好相应的文件夹。如：
+mkdir -p /opt/docker_app/redis/conf/
+vi redis.conf
+
 port 6379
 appendonly yes
 #更多配置参照 https://raw.githubusercontent.com/redis/redis/6.0/redis.conf
 docker run -p 6379:6379 --name redis \
--v /usr/local/redis/redis.conf:/etc/redis/redis.conf \
--v /usr/local/redis/data:/data \
+-v /usr/local/redis/redis.conf:/opt/docker_app/redis/config/redis.conf \
+-v /usr/local/redis/data:/opt/docker_app/redis/data \
 -d redis:6.0.8 \
-redis-server /etc/redis/redis.conf --appendonly yes
-
-
-docker run  -p 6379:6379 --name myredis --privileged=true -v /usr/local/redis/redis.conf:/etc/redis/redis.conf -v /usr/local/redis/data:/data -d redis:6.0.8 redis-server /etc/redis/redis.conf 
+redis-server /opt/docker_app/redis/config/redis.conf
 
 # 可以提前准备redis的原厂配置
 # 修改以下属性即可
