@@ -49,6 +49,212 @@ ip addr
 vi /etc/sysconfig/network-scripts/ifcfg-ens33
 ~~~
 
+# 分区与挂载
+
+## 一、linux分区
+
+### 1.原理介绍
+
+> 1、对Linux来说，无论有几个分区，分给哪一目录使用，他归根结底只有一个根目录，一个独立且唯一的文件结构，Linux中每个分区都是用来组成整个文件系统的一部分。
+>
+> 2、Linux采用了一种叫"载入"的处理方法，它的整个文件系统中包含了一整套的文件和目录，且将一个分区和一个目录联系起来，这是要载入的一个分区将使它的存储空间在一个目录下获得。
+
+### 2.分区和文件关系示意图：
+
+![img](images/32bcc2de52e993b8bf951e065e372843.png)
+
+
+
+## 二、linux挂载
+
+### 1.查看所有设备挂载情况
+
+~~~shell
+指令：lsblk 或者lsblk -f
+~~~
+
+![在这里插入图片描述](images/2a3c0145e5d88d228061732694eb7e2c.png)
+
+![在这里插入图片描述](images/9ef242595c19022a84699d4080b47a63.png)
+
+这里sda1、2、3分别代表第一块硬盘的第一分区第二分区第三分区
+
+## 三、挂载案例
+
+### 1.使用lsblk命令查看
+
+![在这里插入图片描述](images/d502fab5b4d5dae0facb486a77dac11f.png)
+
+### 2. 虚拟机硬盘分区
+
+~~~sh
+分区指令：fdisk   /dev/sdb    其中：sdb 根据实际情况变更
+~~~
+
+开始对sdb分区
+
+m 显示命令列表
+
+p 显示磁盘分区同[fdisk](https://so.csdn.net/so/search?q=fdisk&spm=1001.2101.3001.7020) -l
+
+n 新增分区
+
+d 删除分区
+
+w 写入并退出
+
+说明：开始分区后输入n，新增分区，然后选择p，分区类型为主分区。两次回车默认剩余全部空间，最后输入w写入分区并退出，若不保存退出输入q
+
+~~~sh
+[root@localhost ~]# fdisk   /dev/sdb
+Welcome to fdisk (util-linux 2.23.2).
+
+Changes will remain in memory only, until you decide to write them.
+Be careful before using the write command.
+
+Device does not contain a recognized partition table
+Building a new DOS disklabel with disk identifier 0x60ab3813.
+
+Command (m for help): m
+Command action
+   a   toggle a bootable flag
+   b   edit bsd disklabel
+   c   toggle the dos compatibility flag
+   d   delete a partition
+   g   create a new empty GPT partition table
+   G   create an IRIX (SGI) partition table
+   l   list known partition types
+   m   print this menu
+   n   add a new partition
+   o   create a new empty DOS partition table
+   p   print the partition table
+   q   quit without saving changes
+   s   create a new empty Sun disklabel
+   t   change a partition's system id
+   u   change display/entry units
+   v   verify the partition table
+   w   write table to disk and exit
+   x   extra functionality (experts only)
+
+Command (m for help): p
+
+Disk /dev/sdb: 1073 MB, 1073741824 bytes, 2097152 sectors
+Units = sectors of 1 * 512 = 512 bytes
+Sector size (logical/physical): 512 bytes / 512 bytes
+I/O size (minimum/optimal): 512 bytes / 512 bytes
+Disk label type: dos
+Disk identifier: 0x60ab3813
+
+   Device Boot      Start         End      Blocks   Id  System
+
+Command (m for help): n
+Partition type:
+   p   primary (0 primary, 0 extended, 4 free)
+   e   extended
+Select (default p): p
+Partition number (1-4, default 1): 1
+First sector (2048-2097151, default 2048): 
+Using default value 2048
+Last sector, +sectors or +size{K,M,G} (2048-2097151, default 2097151): 
+Using default value 2097151
+Partition 1 of type Linux and of size 1023 MiB is set
+
+Command (m for help): w
+The partition table has been altered!
+
+Calling ioctl() to re-read partition table.
+Syncing disks.
+~~~
+
+![在这里插入图片描述](images/fd0ac564797919314a50e3f007bd2f5b.png)
+
+### 3.虚拟机硬盘分区格式化
+
+**格式化磁盘，格式化之后才会分配UUID**
+
+~~~sh
+格式化指令：mkfs  -t  ext4     /dev/sdb1    sdb1  根据时间情况变更
+~~~
+
+![在这里插入图片描述](images/ba8bc208dcea9512df73157a2b733b55.png)
+
+**其中ext4是分区类型**
+
+~~~sh
+ mkfs -t ext4 /dev/sdb1
+lsblk -f
+~~~
+
+![在这里插入图片描述](images/687b7f353f9f18244478bbef6230455c.png)
+
+### 4.mount挂载 重启挂载失效
+
+#### 4.1挂载名词解释
+
+> 挂载：将一个分区与一个目录联系起来，
+
+
+
+#### 4.2注意事项
+
+**挂载的路径有文件，如果执行挂载新磁盘后原文件会消失**
+如果很不幸，挂载的路径有文件，不小心把其它文件覆盖了，怎么办？
+比如挂载到了 /apps下，原来/home下的文件全都不见了。
+
+此时我们只需要解挂:
+
+~~~sh
+ umount /dev/sdb1  /apps
+~~~
+
+**umount /apps ###解除挂载,可能会出现占用无法删除,可以使用 umount -fl /apps 强行卸载,**
+解挂后，操作系统指向 /home 的地址改变了，原来的文件又能看见了。
+
+![在这里插入图片描述](images/9cbc133a5a973643f8cc76729508cdfc.png)
+
+#### 4.3挂载
+
+~~~sh
+mount /dev/sdb1 /apps
+~~~
+
+![在这里插入图片描述](images/2933255af1f995ec3a2e5fe5e8439fb5.png)
+
+#### 4.4挂载非空目录解决方案
+
+~~~sh
+##############核心就是先备份到临时目录，挂载完再拷贝回来###############
+# mkdir /new                  //创建临时目录
+
+# cp -R /apps/*  /new     //将/oradata下的所有数据复制到/new
+
+# rm -rf /apps/*          //腾出空间给原来的硬盘（可选）
+
+#mount /dev/sdb /apps  //挂载/apps到新硬盘
+
+# cp -R /new/*  /apps //将/new下的所有数据复制回/apps
+
+# rm -rf /new              //删除临时目录
+~~~
+
+
+
+### 5.实现永久挂载（即重启不消失）
+
+****
+
+> **永久挂载的本质是自动挂载上**
+>
+> 永久挂载：通过修改  /etc/fstab实现挂载
+>
+> **添加完成后执行mount -a或reboot即可生效**
+
+![在这里插入图片描述](images/92fde88b81458f9b0b94a90ab55af564.png)
+
+
+
+
+
 
 
 # 防火墙、端口相关
